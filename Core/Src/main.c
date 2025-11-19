@@ -19,12 +19,18 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "dma.h"
+#include "i2c.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
+#include "string.h"
+#include "data_uart.h"
+#include "i2c_master.h"
+#include "ir.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,6 +102,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
   MX_ADC3_Init();
@@ -103,43 +110,52 @@ int main(void)
   MX_UART4_Init();
   MX_UART5_Init();
   MX_UART7_Init();
+  MX_I2C3_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(GPIOD, LED_3_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_2_Pin | LED_1_Pin, GPIO_PIN_SET);
 
-  uint8_t msg[] = "System Initialized\r\n";
-  HAL_UART_Transmit(&huart4, msg, sizeof(msg) - 1, HAL_MAX_DELAY);
+  // UART 數據傳輸初始化
+  dataUart_Init(&huart4);
 
-  uint32_t adcValue1 = 0;
-  uint32_t voltage_mv = 0;
-  
-  // 啟動 ADC1 校準 (STM32H7 必須先校準)
-  HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
-  
-  // 啟動 ADC1 連續轉換 (只需啟動一次)
-  HAL_ADC_Start(&hadc1);
-  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-  
-  HAL_Delay(10); // 給 ADC 穩定時間
+  // IR 模組初始化
+  IR_Init(&hi2c3, NULL);
+
+  uint32_t lastRequestTime = HAL_GetTick();
+  const uint8_t dataFreq = 50; // in ms
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    // 在連續模式下，等待轉換完成標誌
-    // 讀取最新的轉換值
-    adcValue1 = HAL_ADC_GetValue(&hadc1);
-    // 計算電壓 (16-bit ADC, 3.3V 參考電壓, 單位: mV)
-    voltage_mv = (adcValue1 * 3300) / 65535;
-    
-    // 發送 ADC1 數值和電壓
-    uint8_t buffer[100];
-    int bufLen = snprintf((char *)buffer, sizeof(buffer),
-                          "ADC1: %u (%u mV)\r\n",
-                          (unsigned int)adcValue1, (unsigned int)voltage_mv);
-    HAL_UART_Transmit(&huart4, buffer, bufLen, HAL_MAX_DELAY);
+    // Request IR data every 50ms
+    uint32_t currentTime = HAL_GetTick();
+    if (currentTime - lastRequestTime >= dataFreq && !IR_IsDataReady(SLAVE_1)) {
+      if (IR_ReadData(SLAVE_1) == HAL_OK) {
+        lastRequestTime = currentTime;
+      }
+      // If HAL_BUSY or HAL_ERROR, will retry on next loop
+    }
 
-    HAL_Delay(200);
+    // Check if data is ready
+    if (IR_IsDataReady(SLAVE_1)) {  
+
+      // Display raw hex data for reference (uncomment if needed)
+      // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+
+      // Parse and display as decimal values (now with ambient light removed)
+      // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+
+      updateValues();
+      char outputStr[100];
+      int len = snprintf(outputStr, sizeof(outputStr), "Max Eye: %d, Max Value: %d\r\n", maxEye, maxValue);
+      HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, HAL_MAX_DELAY);
+
+      IR_ClearDataReady(SLAVE_1);
+    }
+    
+    // Small delay to avoid excessive CPU usage
+    HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -166,17 +182,22 @@ void SystemClock_Config(void)
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
-  /** Macro to configure the PLL clock source
-  */
-  __HAL_RCC_PLL_PLLSOURCE_CONFIG(RCC_PLLSOURCE_HSI);
-
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLP = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
+  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOMEDIUM;
+  RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -253,6 +274,19 @@ void MPU_Config(void)
   MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
   MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+  MPU_InitStruct.BaseAddress = 0x30000000;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_32B;
+  MPU_InitStruct.SubRegionDisable = 0x0;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
   /* Enables the MPU */
