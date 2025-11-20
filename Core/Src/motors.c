@@ -99,3 +99,52 @@ void Mtrs_BrakeAll(void) {
     Mtr_Brake(mtrID);
   }
 }
+
+// advanced functions
+void mtrs_Set(float spd1, float spd2, float spd3, float spd4) {
+  Mtr_SetSpeed(MTR0, (spd1 > 0) ? MOTOR_FORWARD : (spd1 < 0) ? MOTOR_BACKWARD : MOTOR_STOP, fabsf(spd1));
+  Mtr_SetSpeed(MTR1, (spd2 > 0) ? MOTOR_FORWARD : (spd2 < 0) ? MOTOR_BACKWARD : MOTOR_STOP, fabsf(spd2));
+  Mtr_SetSpeed(MTR2, (spd3 > 0) ? MOTOR_FORWARD : (spd3 < 0) ? MOTOR_BACKWARD : MOTOR_STOP, fabsf(spd3));
+  Mtr_SetSpeed(MTR3, (spd4 > 0) ? MOTOR_FORWARD : (spd4 < 0) ? MOTOR_BACKWARD : MOTOR_STOP, fabsf(spd4));
+}
+
+//TODO: implement proper polar movement calculations
+void polar_Move(float angle_deg, float speed_percent) {}
+
+// Mtr test
+void mtrTest(void) {
+  // Smooth acceleration: 5 seconds to reach full speed
+  for (float speed = 0.0f; speed <= 100.0f; speed += 1.0f) {
+    // Mtr_SetSpeed(MTR0, MOTOR_FORWARD, speed);
+    Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
+    // Mtr_SetSpeed(MTR2, MOTOR_FORWARD, speed);
+    // Mtr_SetSpeed(MTR3, MOTOR_FORWARD, speed);
+    HAL_Delay(50);  // 50ms per step = 5 seconds total (101 steps × 50ms)
+  }
+  
+  HAL_Delay(100);
+
+  // Smooth deceleration: 5 seconds
+  for (float speed = 100.0f; speed >= 0.0f; speed -= 1.0f) {
+    // Mtr_SetSpeed(MTR0, MOTOR_BACKWARD, speed);
+    Mtr_SetSpeed(MTR1, MOTOR_BACKWARD, speed);
+    // Mtr_SetSpeed(MTR2, MOTOR_BACKWARD, speed);
+    // Mtr_SetSpeed(MTR3, MOTOR_BACKWARD, speed);
+    HAL_Delay(50);  // 50ms per step = 5 seconds total
+  }
+
+  HAL_Delay(500);
+
+  for (float speed = 0.0f; speed <= 100.0f; speed += 1.0f) {
+    // Mtr_SetSpeed(MTR0, MOTOR_FORWARD, speed);
+    Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
+    // Mtr_SetSpeed(MTR2, MOTOR_FORWARD, speed);
+    // Mtr_SetSpeed(MTR3, MOTOR_FORWARD, speed);
+    HAL_Delay(50);  // 50ms per step = 5 seconds total
+  }
+
+  // test smooth braking
+  Mtr_Brake(MTR1);
+
+  HAL_Delay(1000);
+}

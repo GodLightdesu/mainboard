@@ -105,19 +105,19 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_ADC1_Init();
-  MX_ADC2_Init();
-  MX_ADC3_Init();
-  MX_UART8_Init();
+  MX_I2C3_Init();
   MX_UART4_Init();
   MX_UART5_Init();
   MX_UART7_Init();
-  MX_I2C3_Init();
-  MX_TIM3_Init();
-  MX_TIM7_Init();
+  MX_UART8_Init();
+  MX_ADC1_Init();
+  MX_ADC2_Init();
+  MX_ADC3_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
   MX_TIM4_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(GPIOD, LED_3_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_2_Pin | LED_1_Pin, GPIO_PIN_SET);
@@ -127,80 +127,54 @@ int main(void)
 
   // 馬達初始化
   Mtrs_Init();
+  
+  /*
+  // IR 模組初始化
+  IR_Init(&hi2c3, NULL);
 
-  // // IR 模組初始化
-  // IR_Init(&hi2c3, NULL);
-
-  // uint32_t lastRequestTime = HAL_GetTick();
-  // const uint8_t dataFreq = 50; // in ms
-
+  uint32_t lastRequestTime = HAL_GetTick();
+  const uint8_t dataFreq = 50; // in ms
+  */
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    // Smooth acceleration: smaller steps, shorter delays
-    for (float speed = 0.0f; speed <= 100.0f; speed += 1.0f) {
-      // Mtr_SetSpeed(MTR0, MOTOR_FORWARD, speed);
-      Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
-      // Mtr_SetSpeed(MTR2, MOTOR_FORWARD, speed);
-      // Mtr_SetSpeed(MTR3, MOTOR_FORWARD, speed);
-      HAL_Delay(10);  // 20ms per step = 2 seconds total
-    }
+    // Mtr test
+    mtrTest();
 
-    // Mtr_Stop(0);
-    HAL_Delay(100);
-
-    // Smooth deceleration
-    for (float speed = 100.0f; speed >= 0.0f; speed -= 1.0f) {
-      // Mtr_SetSpeed(MTR0, MOTOR_BACKWARD, speed);
-      Mtr_SetSpeed(MTR1, MOTOR_BACKWARD, speed);
-      // Mtr_SetSpeed(MTR2, MOTOR_BACKWARD, speed);
-      // Mtr_SetSpeed(MTR3, MOTOR_BACKWARD, speed);
-      HAL_Delay(20);  // 20ms per step = 2 seconds total
-    }
-
-    for (float speed = 0.0f; speed <= 100.0f; speed += 1.0f) {
-      // Mtr_SetSpeed(MTR0, MOTOR_FORWARD, speed);
-      Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
-      // Mtr_SetSpeed(MTR2, MOTOR_FORWARD, speed);
-      // Mtr_SetSpeed(MTR3, MOTOR_FORWARD, speed);
-      HAL_Delay(20);  // 20ms per step = 2 seconds total
-    }
-
-    // test smooth braking
-    // Mtr_Brake(MTR1);
-
-    HAL_Delay(1000);
-
+    /*  IR data reading example
     // Request IR data every 50ms
-    // uint32_t currentTime = HAL_GetTick();
-    // if (currentTime - lastRequestTime >= dataFreq && !IR_IsDataReady(SLAVE_1)) {
-    //   if (IR_ReadData(SLAVE_1) == HAL_OK) {
-    //     lastRequestTime = currentTime;
-    //   }
-    //   // If HAL_BUSY or HAL_ERROR, will retry on next loop
-    // }
+    uint32_t currentTime = HAL_GetTick();
+    if (currentTime - lastRequestTime >= dataFreq && !IR_IsDataReady(SLAVE_1)) {
+      if (IR_ReadData(SLAVE_1) == HAL_OK) {
+        lastRequestTime = currentTime;
+      }
+      // If HAL_BUSY or HAL_ERROR, will retry on next loop
+    }
 
-    // // Check if data is ready
-    // if (IR_IsDataReady(SLAVE_1)) {  
+    // Check if data is ready
+    if (IR_IsDataReady(SLAVE_1)) {
 
-    //   // Display raw hex data for reference (uncomment if needed)
-    //   // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+      // Display raw hex data for reference (uncomment if needed)
+      // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
 
-    //   // Parse and display as decimal values (now with ambient light removed)
-    //   // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+      // Parse and display as decimal values (now with ambient light removed)
+      // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
 
-    //   updateValues();
-    //   char outputStr[100];
-    //   int len = snprintf(outputStr, sizeof(outputStr), "Max Eye: %d, Max Value: %d\r\n", maxEye, maxValue);
-    //   HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, HAL_MAX_DELAY);
+      updateValues();
+      char outputStr[100];
+      int len = snprintf(outputStr, sizeof(outputStr), "Max Eye: %d, Max Value:
+    %d\r\n", maxEye, maxValue); HAL_UART_Transmit(&huart4, (const uint8_t
+    *)outputStr, len, HAL_MAX_DELAY);
 
-    //   IR_ClearDataReady(SLAVE_1);
-    // }
+      IR_ClearDataReady(SLAVE_1);
+    }
+
+    // Small delay to avoid excessive CPU usage
+    HAL_Delay(1);
+    */
     
-    // // Small delay to avoid excessive CPU usage
-    // HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

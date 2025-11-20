@@ -15,6 +15,7 @@
   "files.associations": {
     "usart.h": "c",
     "limits": "c",
-    "motors.h": "c"
+    "motors.h": "c",
+    "stm32h7xx_hal.h": "c"
   }
 }

@@ -56,6 +56,10 @@ void Mtr_Brake(MtrID_t motor_id);
 void Mtrs_BrakeAll(void);
 
 // advanced functions
+void mtrs_Set(float spd1, float spd2, float spd3, float spd4);
 void polar_Move(float angle_deg, float speed_percent);
+
+// Mtr test function
+void mtrTest(void);
 
 #endif // MOTORS_H
