@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/main.c
     Core/Src/data_uart.c
     Core/Src/i2c_master.c
+    Core/Src/motrs.c
     Core/Src/ir.c
 )
 

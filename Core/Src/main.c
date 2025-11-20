@@ -21,6 +21,7 @@
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -31,6 +32,7 @@
 #include "data_uart.h"
 #include "i2c_master.h"
 #include "ir.h"
+#include "motors.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -111,6 +113,11 @@ int main(void)
   MX_UART5_Init();
   MX_UART7_Init();
   MX_I2C3_Init();
+  MX_TIM3_Init();
+  MX_TIM7_Init();
+  MX_TIM1_Init();
+  MX_TIM2_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(GPIOD, LED_3_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_2_Pin | LED_1_Pin, GPIO_PIN_SET);
@@ -118,44 +125,82 @@ int main(void)
   // UART 數據傳輸初始化
   dataUart_Init(&huart4);
 
-  // IR 模組初始化
-  IR_Init(&hi2c3, NULL);
+  // 馬達初始化
+  Mtrs_Init();
 
-  uint32_t lastRequestTime = HAL_GetTick();
-  const uint8_t dataFreq = 50; // in ms
+  // // IR 模組初始化
+  // IR_Init(&hi2c3, NULL);
+
+  // uint32_t lastRequestTime = HAL_GetTick();
+  // const uint8_t dataFreq = 50; // in ms
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
+    // Smooth acceleration: smaller steps, shorter delays
+    for (float speed = 0.0f; speed <= 100.0f; speed += 1.0f) {
+      // Mtr_SetSpeed(MTR0, MOTOR_FORWARD, speed);
+      Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
+      // Mtr_SetSpeed(MTR2, MOTOR_FORWARD, speed);
+      // Mtr_SetSpeed(MTR3, MOTOR_FORWARD, speed);
+      HAL_Delay(10);  // 20ms per step = 2 seconds total
+    }
+
+    // Mtr_Stop(0);
+    HAL_Delay(100);
+
+    // Smooth deceleration
+    for (float speed = 100.0f; speed >= 0.0f; speed -= 1.0f) {
+      // Mtr_SetSpeed(MTR0, MOTOR_BACKWARD, speed);
+      Mtr_SetSpeed(MTR1, MOTOR_BACKWARD, speed);
+      // Mtr_SetSpeed(MTR2, MOTOR_BACKWARD, speed);
+      // Mtr_SetSpeed(MTR3, MOTOR_BACKWARD, speed);
+      HAL_Delay(20);  // 20ms per step = 2 seconds total
+    }
+
+    for (float speed = 0.0f; speed <= 100.0f; speed += 1.0f) {
+      // Mtr_SetSpeed(MTR0, MOTOR_FORWARD, speed);
+      Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
+      // Mtr_SetSpeed(MTR2, MOTOR_FORWARD, speed);
+      // Mtr_SetSpeed(MTR3, MOTOR_FORWARD, speed);
+      HAL_Delay(20);  // 20ms per step = 2 seconds total
+    }
+
+    // test smooth braking
+    // Mtr_Brake(MTR1);
+
+    HAL_Delay(1000);
+
     // Request IR data every 50ms
-    uint32_t currentTime = HAL_GetTick();
-    if (currentTime - lastRequestTime >= dataFreq && !IR_IsDataReady(SLAVE_1)) {
-      if (IR_ReadData(SLAVE_1) == HAL_OK) {
-        lastRequestTime = currentTime;
-      }
-      // If HAL_BUSY or HAL_ERROR, will retry on next loop
-    }
+    // uint32_t currentTime = HAL_GetTick();
+    // if (currentTime - lastRequestTime >= dataFreq && !IR_IsDataReady(SLAVE_1)) {
+    //   if (IR_ReadData(SLAVE_1) == HAL_OK) {
+    //     lastRequestTime = currentTime;
+    //   }
+    //   // If HAL_BUSY or HAL_ERROR, will retry on next loop
+    // }
 
-    // Check if data is ready
-    if (IR_IsDataReady(SLAVE_1)) {  
+    // // Check if data is ready
+    // if (IR_IsDataReady(SLAVE_1)) {  
 
-      // Display raw hex data for reference (uncomment if needed)
-      // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+    //   // Display raw hex data for reference (uncomment if needed)
+    //   // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
 
-      // Parse and display as decimal values (now with ambient light removed)
-      // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+    //   // Parse and display as decimal values (now with ambient light removed)
+    //   // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
 
-      updateValues();
-      char outputStr[100];
-      int len = snprintf(outputStr, sizeof(outputStr), "Max Eye: %d, Max Value: %d\r\n", maxEye, maxValue);
-      HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, HAL_MAX_DELAY);
+    //   updateValues();
+    //   char outputStr[100];
+    //   int len = snprintf(outputStr, sizeof(outputStr), "Max Eye: %d, Max Value: %d\r\n", maxEye, maxValue);
+    //   HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, HAL_MAX_DELAY);
 
-      IR_ClearDataReady(SLAVE_1);
-    }
+    //   IR_ClearDataReady(SLAVE_1);
+    // }
     
-    // Small delay to avoid excessive CPU usage
-    HAL_Delay(1);
+    // // Small delay to avoid excessive CPU usage
+    // HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -178,25 +223,24 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 3;
+  RCC_OscInitStruct.PLL.PLLN = 60;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
-  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOMEDIUM;
+  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -216,7 +260,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -233,7 +277,7 @@ void PeriphCommonClock_Config(void)
   /** Initializes the peripherals clock
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInitStruct.PLL2.PLL2M = 4;
+  PeriphClkInitStruct.PLL2.PLL2M = 3;
   PeriphClkInitStruct.PLL2.PLL2N = 10;
   PeriphClkInitStruct.PLL2.PLL2P = 2;
   PeriphClkInitStruct.PLL2.PLL2Q = 2;
