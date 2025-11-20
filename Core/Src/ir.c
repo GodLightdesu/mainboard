@@ -90,7 +90,6 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 
 void updateValues() {
   // Require both slaves to have new data
-  DataReady[SLAVE_2] = 1;
   if (!IR_IsDataReady(SLAVE_1) || !IR_IsDataReady(SLAVE_2)) {
     return; // No new data to process
   }
