@@ -33,6 +33,12 @@
 #include "i2c_master.h"
 #include "ir.h"
 #include "motors.h"
+
+/* Application configuration constants */
+#define POWER_ON_DELAY_CYCLES   1000000U  /* Capacitor stabilization delay */
+#define LED_HEARTBEAT_MS        100U      /* LED toggle interval (100ms = 5Hz blink) */
+#define IR_SAMPLE_PERIOD_MS     20U       /* IR sensor data request interval (50Hz) */
+#define MAIN_LOOP_DELAY_MS      1U        /* Small delay to prevent CPU hogging */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -77,7 +83,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  /* Power-on delay to allow capacitors to stabilize */
+  for(volatile uint32_t i = 0; i < POWER_ON_DELAY_CYCLES; i++);
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -119,61 +126,68 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
+
+  /* Initialize status LEDs */
   HAL_GPIO_WritePin(GPIOD, LED_3_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_2_Pin | LED_1_Pin, GPIO_PIN_SET);
-
-  // UART 數據傳輸初始化
-  dataUart_Init(&huart4);
-
-  // 馬達初始化
-  Mtrs_Init();
   
-  /*
-  // IR 模組初始化
-  IR_Init(&hi2c3, NULL);
+  /* Initialize application modules */
+  dataUart_Init(&huart4);
+  Mtrs_Init();  /* Uncomment when motor control is needed */
+  IR_Init(&hi2c3, NULL);  /* Initialize IR sensor interface */
 
-  uint32_t lastRequestTime = HAL_GetTick();
-  const uint8_t dataFreq = 50; // in ms
-  */
+  /* Initialize timing variables */
+  // uint32_t lastIrRequestTime = HAL_GetTick();
+  // uint32_t lastLedToggleTime = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    // Mtr test
+    // const uint32_t currentTime = HAL_GetTick();
+    
+    // /* Status LED heartbeat (non-blocking) */
+    // if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
+    //   HAL_GPIO_TogglePin(GPIOD, LED_3_Pin);
+    //   lastLedToggleTime = currentTime;
+    // }
+
+    /* Example: Test movement (uncomment to use) */
+    // polar_Move(135.0f, 70.0f);
     mtrTest();
 
-    /*  IR data reading example
-    // Request IR data every 50ms
-    uint32_t currentTime = HAL_GetTick();
-    if (currentTime - lastRequestTime >= dataFreq && !IR_IsDataReady(SLAVE_1)) {
-      if (IR_ReadData(SLAVE_1) == HAL_OK) {
-        lastRequestTime = currentTime;
-      }
-      // If HAL_BUSY or HAL_ERROR, will retry on next loop
-    }
+    /* Request IR sensor data at fixed intervals */
+    // if ((currentTime - lastIrRequestTime >= IR_SAMPLE_PERIOD_MS) && !IR_IsDataReady(SLAVE_1)) {
+    //   if (IR_ReadData(SLAVE_1) == HAL_OK) {
+    //     lastIrRequestTime = currentTime;
+    //   }
+    //   /* If HAL_BUSY or HAL_ERROR, retry on next iteration */
+    // }
 
-    // Check if data is ready
-    if (IR_IsDataReady(SLAVE_1)) {
+    // /* Process IR sensor data when ready */
+    // if (IR_IsDataReady(SLAVE_1)) {
+    //   /* Optional: Display raw hex data for debugging */
+    //   // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
 
-      // Display raw hex data for reference (uncomment if needed)
-      // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+    //   /* Optional: Parse and display as decimal values */
+    //   // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
 
-      // Parse and display as decimal values (now with ambient light removed)
-      // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
+    //   /* Update max eye tracking */
+    //   updateValues();
+      
+    //   /* Transmit results via UART */
+    //   char outputStr[100];
+    //   int len = snprintf(outputStr, sizeof(outputStr), 
+    //                      "Max Eye: %d, Max Value: %d\r\n", 
+    //                      maxEye, maxValue);
+    //   HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, 100);
 
-      updateValues();
-      char outputStr[100];
-      int len = snprintf(outputStr, sizeof(outputStr), "Max Eye: %d, Max Value:
-    %d\r\n", maxEye, maxValue); HAL_UART_Transmit(&huart4, (const uint8_t
-    *)outputStr, len, HAL_MAX_DELAY);
+    //   /* Clear ready flag */
+    //   IR_ClearDataReady(SLAVE_1);
+    // }
 
-      IR_ClearDataReady(SLAVE_1);
-    }
-
-    // Small delay to avoid excessive CPU usage
-    HAL_Delay(1);
-    */
+    /* Small delay to reduce CPU usage and allow interrupts */
+    HAL_Delay(MAIN_LOOP_DELAY_MS);
     
     /* USER CODE END WHILE */
 
@@ -197,19 +211,21 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 3;
-  RCC_OscInitStruct.PLL.PLLN = 60;
+  RCC_OscInitStruct.PLL.PLLN = 30;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -229,12 +245,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
