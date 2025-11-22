@@ -59,15 +59,21 @@ typedef struct {
 } Mtr;
 
 void Mtrs_Init(void);
+/* Motor basic control functions */
 void mtr_Forward(MtrID_t mtr_id, uint8_t speed);
 void mtr_Backward(MtrID_t mtr_id, uint8_t speed);
 void mtr_Brake(MtrID_t mtr_id);
 void mtr_Stop(MtrID_t mtr_id);
 void mtr_SetDecayMode(MtrID_t mtr_id, DecayMode_t decay_mode);
 
+/* Motor status and utility functions */
 MtrDir_t mtr_GetDirection(MtrID_t mtr_id);
 uint8_t mtr_GetSpeed(MtrID_t mtr_id);
 uint32_t spd_Map(uint8_t speed);
+
+/* Motor advanced control functions */
+void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3);
+void polarMove(float angle_deg, uint8_t speed);
 
 /* Test and calibration functions */
 void mtr_FindMinimumStartupPWM(MtrID_t mtr_id);

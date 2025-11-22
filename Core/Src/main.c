@@ -179,8 +179,9 @@ int main(void)
     HAL_GPIO_TogglePin(GPIOB, LED_4_Pin);
     HAL_Delay(100);
 
-    mtr_TestAcceleration(MTR1, 1, 100);
-    mtr_TestAcceleration(MTR2, 1, 100);
+    // mtr_TestAcceleration(MTR1, 1, 100);
+    // mtr_TestAcceleration(MTR2, 1, 100);
+    polarMove(165, 45);
     
     /* Small delay to reduce CPU usage and allow interrupts */
     HAL_Delay(MAIN_LOOP_DELAY_MS);

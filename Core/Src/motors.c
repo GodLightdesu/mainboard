@@ -15,6 +15,7 @@ void Mtrs_Init(void) {
   }
 }
 
+/* Motor basic control functions */
 void mtr_Forward(MtrID_t mtr_id, uint8_t speed) {
   if (mtr_id >= MOTOR_COUNT || speed > MAX_SPEED) {
     return;
@@ -22,9 +23,8 @@ void mtr_Forward(MtrID_t mtr_id, uint8_t speed) {
 
   Mtr *mtr = &mtrs[mtr_id];
   speed = (speed > MAX_SPEED) ? MAX_SPEED : speed;
-  
   uint16_t pulse = (speed == 0) ? 0 : spd_Map(speed);
-
+  
   if (mtr->decay_mode == FAST_DECAY) {
     /* Fast Decay: FI=PWM, BI=0 (brake during OFF time) */
     __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, pulse);
@@ -47,7 +47,6 @@ void mtr_Backward(MtrID_t mtr_id, uint8_t speed) {
 
   Mtr *mtr = &mtrs[mtr_id];
   speed = (speed > MAX_SPEED) ? MAX_SPEED : speed;
-  
   uint16_t pulse = (speed == 0) ? 0 : spd_Map(speed);
 
   if (mtr->decay_mode == FAST_DECAY) {
@@ -101,6 +100,7 @@ void mtr_SetDecayMode(MtrID_t mtr_id, DecayMode_t decay_mode) {
   mtrs[mtr_id].decay_mode = decay_mode;
 }
 
+/* Motor status and utility functions */
 MtrDir_t mtr_GetDirection(MtrID_t mtr_id) {
   if (mtr_id >= MOTOR_COUNT) {
     return STOP;
@@ -126,6 +126,44 @@ uint32_t spd_Map(uint8_t speed) {
     speed = MAX_SPEED;
   }
   return PWM_STARTUP_MIN + ((uint32_t)speed * (PWM_MAX_VALUE - PWM_STARTUP_MIN)) / MAX_SPEED;
+}
+
+/* Motor advanced control functions */
+void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
+  int spds[MOTOR_COUNT] = {spd0, spd1, spd2, spd3};
+  for (int i = 0; i < MOTOR_COUNT; i++) {
+    int speed = spds[i];
+    uint8_t abs_speed;
+
+    if (speed > 0) {
+      abs_speed = (speed > 255) ? 255 : (uint8_t)speed;
+      mtr_Forward((MtrID_t)i, abs_speed);
+    } else if (speed < 0) {
+      abs_speed = (-speed > 255) ? 255 : (uint8_t)(-speed);
+      mtr_Backward((MtrID_t)i, abs_speed);
+    } else {  /* speed == 0 */
+      mtr_Stop((MtrID_t)i);
+    }
+  }
+}
+
+void polarMove(float angle_deg, uint8_t speed_percent) {
+  speed_percent = (speed_percent > MAX_SPEED) ? MAX_SPEED : speed_percent;
+  const float angle_rad = angle_deg * (M_PI / 180.0f);
+  const float phase_offset = M_PI / 4.0f;
+
+  /* Calculate with deadzone and rounding */
+  const float DEADZONE = 0.5f; // Smaller deadzone since we're rounding
+
+  /* Calculate as floats */
+  float calcA = speed_percent * sinf(angle_rad + phase_offset);
+  float calcB = speed_percent * sinf(angle_rad - phase_offset);
+  
+  /* Apply deadzone and rounding */
+  int spdA = (fabsf(calcA) < DEADZONE) ? 0 : (int)roundf(calcA);
+  int spdB = (fabsf(calcB) < DEADZONE) ? 0 : (int)roundf(calcB);
+  
+  mtrs_Set4Speed(-spdB, spdA, spdB, -spdA);
 }
 
 /* ============================================================================
