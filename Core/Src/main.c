@@ -175,8 +175,22 @@ int main(void)
         IR_ClearDataReady(slaveId);
       }
     }
+    uint8_t spd = 60;
+    float angle_deg = 0.0f;
+    switch (maxEye) {
+    case 0: case 6: angle_deg = 180.0f; break;
+    case 1: case 2: angle_deg = 90.0f;  break;
+    case 5: case 4: angle_deg = 270.0f; break;
+    case 3: angle_deg = 0.0f; break;
+    default:
+      angle_deg = 0.0f;
+      spd = 0;
+    }
+    /* Stop if no valid detection */
+    if (maxValue < 10) { spd = 0; }
+    polarMove(angle_deg, spd);
 
-    HAL_Delay(1);  /* Small delay to reduce CPU usage */
+    HAL_Delay(10);  /* Small delay to reduce CPU usage */
     
     /* USER CODE END WHILE */
 
