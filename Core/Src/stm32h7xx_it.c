@@ -22,6 +22,10 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "i2c_master.h"
+
+/* External I2C Master instance */
+extern I2C_Master_t i2cMaster;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -257,5 +261,19 @@ void I2C3_ER_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief I2C Master RX Complete Callback
+  */
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+  I2C_Master_RxCallback(&i2cMaster, hi2c);
+}
+
+/**
+  * @brief I2C Error Callback
+  */
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
+  I2C_Master_ErrorCallback(&i2cMaster, hi2c);
+}
 
 /* USER CODE END 1 */

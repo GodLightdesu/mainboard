@@ -54,7 +54,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+/* I2C Master instance (non-static for use in interrupt handlers) */
+I2C_Master_t i2cMaster;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -79,7 +80,8 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   /* Power-on delay to allow capacitors to stabilize */
-  for(volatile uint32_t i = 0; i < POWER_ON_DELAY_CYCLES; i++);
+  /* TEMPORARILY DISABLED FOR DEBUGGING - Re-enable after confirming flash works */
+  // for(volatile uint32_t i = 0; i < POWER_ON_DELAY_CYCLES; i++);
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -121,70 +123,60 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
-
   /* Initialize status LEDs */
   HAL_GPIO_WritePin(GPIOD, LED_2_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_3_Pin | LED_4_Pin, GPIO_PIN_SET);
   
+  /* Initialize I2C Master */
+  I2C_Master_Init(&i2cMaster, &hi2c3);
+  
   /* Initialize application modules */
-  dataUart_Init(&huart4);
-  Mtrs_Init();  /* Uncomment when motor control is needed */
-  IR_Init(&hi2c3);  /* Initialize IR sensor interface */
-
+  dataUart_Init(&huart4);    /* UART for data output */
+  IR_Init(&i2cMaster);       /* Initialize IR sensor interface */
+  /* Disable SLAVE_2 initially if not used */
+  // I2C_Master_SetSlaveEnabled(&i2cMaster, SLAVE_2, false);
+  Mtrs_Init();               /* Initialize motor control module */
+  
+  /* Enable sequential polling mode: automatically read all slaves in order */
+  I2C_Master_EnableSequentialMode(&i2cMaster, IR_SAMPLE_PERIOD_MS);
+  
   /* Initialize timing variables */
-  // uint32_t lastIrRequestTime = HAL_GetTick();
-  // uint32_t lastLedToggleTime = HAL_GetTick();
+  uint32_t lastLedToggleTime = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    // const uint32_t currentTime = HAL_GetTick();
+    const uint32_t currentTime = HAL_GetTick();
     
-    // /* Status LED heartbeat (non-blocking) */
-    // if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
-    //   HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
-    //   lastLedToggleTime = currentTime;
-    // }
-
-    // /* Request IR sensor data at fixed intervals */
-    // if ((currentTime - lastIrRequestTime >= IR_SAMPLE_PERIOD_MS) && !IR_IsDataReady(SLAVE_1)) {
-    //   if (IR_ReadData(SLAVE_1) == HAL_OK) {
-    //     lastIrRequestTime = currentTime;
-    //   }
-    //   /* If HAL_BUSY or HAL_ERROR, retry on next iteration */
-    // }
-
-    // /* Process IR sensor data when ready */
-    // if (IR_IsDataReady(SLAVE_1)) {
-    //   /* Update max eye tracking */
-    //   updateValues();
-      
-    //   /* Transmit results via UART */
-    //   char outputStr[100];
-    //   int len = snprintf(outputStr, sizeof(outputStr), 
-    //                      "Max Eye: %d, Max Value: %d\r\n", 
-    //                      maxEye, maxValue);
-    //   HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, 100);
-
-    //   /* Clear ready flag */
-    //   IR_ClearDataReady(SLAVE_1);
-    // }
-
+    /* Process I2C Master state machine (handles sequential polling) */
+    I2C_Master_Process(&i2cMaster);
     
-    HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
-    HAL_Delay(100);
-    HAL_GPIO_TogglePin(GPIOB, LED_3_Pin);
-    HAL_Delay(100);
-    HAL_GPIO_TogglePin(GPIOB, LED_4_Pin);
-    HAL_Delay(100);
+    /* Status LED heartbeat (non-blocking) */
+    if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
+      HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
+      lastLedToggleTime = currentTime;
+    }
 
-    // mtr_TestAcceleration(MTR1, 1, 100);
-    // mtr_TestAcceleration(MTR2, 1, 100);
-    polarMove(165, 45);
-    
-    /* Small delay to reduce CPU usage and allow interrupts */
-    HAL_Delay(MAIN_LOOP_DELAY_MS);
+    /* Process IR sensor data when ready (any slave) */
+    for (uint8_t slaveId = 0; slaveId < IR_SLAVES_NO; slaveId++) {
+      if (IR_IsDataReady(slaveId)) {
+        /* Update max eye tracking */
+        updateIRValues(slaveId);
+        
+        /* Transmit results via UART */
+        char outputStr[100];
+        int len = snprintf(outputStr, sizeof(outputStr), 
+                           "Slave%d Eye:%d Val:%d\r\n", 
+                           slaveId, maxEye, maxValue);
+        HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, 100);
+        
+        /* Clear data ready flag to allow next read */
+        IR_ClearDataReady(slaveId);
+      }
+    }
+
+    HAL_Delay(1);  /* Small delay to reduce CPU usage */
     
     /* USER CODE END WHILE */
 

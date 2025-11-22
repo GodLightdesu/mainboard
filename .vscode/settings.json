@@ -20,6 +20,8 @@
     "ir.h": "c",
     "i2c_master.h": "c",
     "tim.h": "c",
-    "data_uart.h": "c"
+    "data_uart.h": "c",
+    "stdint.h": "c",
+    "const.h": "c"
   }
 }
