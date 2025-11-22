@@ -1,10 +1,6 @@
 #ifndef MOTORS_H
 #define MOTORS_H
 
-#include "stdint.h"
-#include "math.h"
-#include "tim.h"
-
 /*
 Motor Layout:
   0(FL)  1(FR)
@@ -25,48 +21,59 @@ PWM Channel Mapping:
     3    TIM4_CH4    TIM4_CH3
 */
 
+#include "tim.h"
+#include "stdint.h"
+#include "math.h"
+
 #define MOTOR_COUNT 4
-#define PWM_MAX_VALUE 1199  /**< PWM period for 100 kHz */
+#define MAX_SPEED 100
+#define PWM_MAX_VALUE (uint16_t)(1000 - 1)   /**< 10kHz PWM @ 10MHz timer clock */
+#define PWM_STARTUP_MIN 400                  /**< Min PWM for motor startup (~40% duty, ~4.8V @ 12V supply) */
 
-/** Motor configuration structure */
-typedef struct {
-  TIM_HandleTypeDef *htim;  /**< Timer handle */
-  uint32_t channel_fi;      /**< Forward Input PWM channel */
-  uint32_t channel_bi;      /**< Backward Input PWM channel */
-} Mtr;
-
-/** Motor direction control */
 typedef enum {
-  MOTOR_STOP = 0,   /**< Coast stop (FI=0, BI=0) */
-  MOTOR_FORWARD,    /**< Forward rotation (FI=PWM, BI=0) */
-  MOTOR_BACKWARD,   /**< Backward rotation (FI=0, BI=PWM) */
-  MOTOR_BRAKE       /**< Active brake (FI=PWM, BI=PWM) */
-} MtrDirection_t;
+  FAST_DECAY = 0,
+  SLOW_DECAY
+} DecayMode_t;
 
-/** Motor identifiers */
 typedef enum {
-  MTR0 = 0,  /**< Front Left */
-  MTR1,      /**< Front Right */
-  MTR2,      /**< Rear Left */
-  MTR3       /**< Rear Right */
+  STOP = 0,
+  FORWARD,
+  BACKWARD,
+  BRAKE
+} MtrDir_t;
+
+typedef enum {
+  MTR0 = 0, /**< Front Left */
+  MTR1,     /**< Front Right */
+  MTR2,     /**< Rear Left */
+  MTR3      /**< Rear Right */
 } MtrID_t;
 
-/* Basic motor control */
+typedef struct {
+  TIM_HandleTypeDef *htim;      /**< Timer handle */
+  const uint32_t channel_fi;    /**< Forward Input PWM channel */
+  const uint32_t channel_bi;    /**< Backward Input PWM channel */
+  DecayMode_t decay_mode;       /**< Motor decay mode (fast or slow) */
+  uint8_t speed;                /**< Current speed percentage (0-100) */
+  MtrDir_t direction;           /**< Current motor direction */
+} Mtr;
 
-/**
- * @brief   Initialize all motors
- */
 void Mtrs_Init(void);
-void Mtr_SetSpeed(MtrID_t motor_id, MtrDirection_t direction, float speed_percent);
-void Mtr_Stop(MtrID_t motor_id);
-void Mtr_Brake(MtrID_t motor_id);
-void Mtrs_BrakeAll(void);
+void mtr_Forward(MtrID_t mtr_id, uint8_t speed);
+void mtr_Backward(MtrID_t mtr_id, uint8_t speed);
+void mtr_Brake(MtrID_t mtr_id);
+void mtr_Stop(MtrID_t mtr_id);
+void mtr_SetDecayMode(MtrID_t mtr_id, DecayMode_t decay_mode);
 
-// Advanced movement functions
-void mtrs_Set(float spd1, float spd2, float spd3, float spd4);
-void polar_Move(float angle_deg, float speed_percent);
+MtrDir_t mtr_GetDirection(MtrID_t mtr_id);
+uint8_t mtr_GetSpeed(MtrID_t mtr_id);
+uint32_t spd_Map(uint8_t speed);
 
-// Test function
-void mtrTest(void);
+/* Test and calibration functions */
+void mtr_FindMinimumStartupPWM(MtrID_t mtr_id);
+void mtr_TestAllMotors(void);
+void mtr_TestAcceleration(MtrID_t mtr_id, uint8_t step, uint8_t max_speed);
+
+// void mtrs_setSpeed();
 
 #endif // MOTORS_H

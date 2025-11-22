@@ -31,14 +31,9 @@
 #include "string.h"
 #include "data_uart.h"
 #include "i2c_master.h"
-#include "ir.h"
 #include "motors.h"
-
-/* Application configuration constants */
-#define POWER_ON_DELAY_CYCLES   1000000U  /* Capacitor stabilization delay */
-#define LED_HEARTBEAT_MS        100U      /* LED toggle interval (100ms = 5Hz blink) */
-#define IR_SAMPLE_PERIOD_MS     20U       /* IR sensor data request interval (50Hz) */
-#define MAIN_LOOP_DELAY_MS      1U        /* Small delay to prevent CPU hogging */
+#include "const.h"
+#include "ir.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -128,13 +123,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* Initialize status LEDs */
-  HAL_GPIO_WritePin(GPIOD, LED_3_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOB, LED_2_Pin | LED_1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOD, LED_2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, LED_3_Pin | LED_4_Pin, GPIO_PIN_SET);
   
   /* Initialize application modules */
   dataUart_Init(&huart4);
   Mtrs_Init();  /* Uncomment when motor control is needed */
-  IR_Init(&hi2c3, NULL);  /* Initialize IR sensor interface */
+  IR_Init(&hi2c3);  /* Initialize IR sensor interface */
 
   /* Initialize timing variables */
   // uint32_t lastIrRequestTime = HAL_GetTick();
@@ -148,15 +143,11 @@ int main(void)
     
     // /* Status LED heartbeat (non-blocking) */
     // if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
-    //   HAL_GPIO_TogglePin(GPIOD, LED_3_Pin);
+    //   HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
     //   lastLedToggleTime = currentTime;
     // }
 
-    /* Example: Test movement (uncomment to use) */
-    // polar_Move(135.0f, 70.0f);
-    mtrTest();
-
-    /* Request IR sensor data at fixed intervals */
+    // /* Request IR sensor data at fixed intervals */
     // if ((currentTime - lastIrRequestTime >= IR_SAMPLE_PERIOD_MS) && !IR_IsDataReady(SLAVE_1)) {
     //   if (IR_ReadData(SLAVE_1) == HAL_OK) {
     //     lastIrRequestTime = currentTime;
@@ -166,12 +157,6 @@ int main(void)
 
     // /* Process IR sensor data when ready */
     // if (IR_IsDataReady(SLAVE_1)) {
-    //   /* Optional: Display raw hex data for debugging */
-    //   // DisplayRawHexData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
-
-    //   /* Optional: Parse and display as decimal values */
-    //   // ParseAndDisplayIRData(ProcessBuffer[SLAVE_1], IR_BUFFER_SIZE);
-
     //   /* Update max eye tracking */
     //   updateValues();
       
@@ -186,6 +171,17 @@ int main(void)
     //   IR_ClearDataReady(SLAVE_1);
     // }
 
+    
+    HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
+    HAL_Delay(100);
+    HAL_GPIO_TogglePin(GPIOB, LED_3_Pin);
+    HAL_Delay(100);
+    HAL_GPIO_TogglePin(GPIOB, LED_4_Pin);
+    HAL_Delay(100);
+
+    mtr_TestAcceleration(MTR1, 1, 100);
+    mtr_TestAcceleration(MTR2, 1, 100);
+    
     /* Small delay to reduce CPU usage and allow interrupts */
     HAL_Delay(MAIN_LOOP_DELAY_MS);
     
@@ -218,13 +214,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 3;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 30;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
@@ -267,7 +262,7 @@ void PeriphCommonClock_Config(void)
   /** Initializes the peripherals clock
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInitStruct.PLL2.PLL2M = 3;
+  PeriphClkInitStruct.PLL2.PLL2M = 4;
   PeriphClkInitStruct.PLL2.PLL2N = 10;
   PeriphClkInitStruct.PLL2.PLL2P = 2;
   PeriphClkInitStruct.PLL2.PLL2Q = 2;
@@ -315,7 +310,7 @@ void MPU_Config(void)
   */
   MPU_InitStruct.Number = MPU_REGION_NUMBER1;
   MPU_InitStruct.BaseAddress = 0x30000000;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_32B;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_256B;
   MPU_InitStruct.SubRegionDisable = 0x0;
   MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
   MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;

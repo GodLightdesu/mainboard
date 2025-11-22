@@ -17,6 +17,9 @@
     "limits": "c",
     "motors.h": "c",
     "stm32h7xx_hal.h": "c",
-    "ir.h": "c"
+    "ir.h": "c",
+    "i2c_master.h": "c",
+    "tim.h": "c",
+    "data_uart.h": "c"
   }
 }

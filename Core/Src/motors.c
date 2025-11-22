@@ -1,181 +1,229 @@
 #include "motors.h"
+#include "data_uart.h"  /* For UART output */
 
-/* Motor configuration array - indexed by MtrID_t */
-const Mtr motors[MOTOR_COUNT] = {
-  {&htim1, TIM_CHANNEL_4, TIM_CHANNEL_3}, /* MTR0 - Front Left */
-  {&htim2, TIM_CHANNEL_4, TIM_CHANNEL_3}, /* MTR1 - Front Right */
-  {&htim3, TIM_CHANNEL_4, TIM_CHANNEL_3}, /* MTR2 - Rear Left */
-  {&htim4, TIM_CHANNEL_4, TIM_CHANNEL_3}, /* MTR3 - Rear Right */
+static Mtr mtrs[MOTOR_COUNT] = {
+  { &htim1, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 0 (Front Left)
+  { &htim2, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 1 (Front Right)
+  { &htim3, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 2 (Rear Left)
+  { &htim4, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP }   // Motor 3 (Rear Right)
 };
-
-/* Private state tracking - volatile for potential ISR access */
-static volatile MtrDirection_t motor_direction[MOTOR_COUNT] = {
-  MOTOR_STOP, MOTOR_STOP, MOTOR_STOP, MOTOR_STOP
-};
-static volatile float motor_speed[MOTOR_COUNT] = {0.0f, 0.0f, 0.0f, 0.0f};
 
 void Mtrs_Init(void) {
-  for (MtrID_t mtrID = 0; mtrID < MOTOR_COUNT; mtrID++) {
-    /* Start PWM channels for H-bridge control */
-    HAL_TIM_PWM_Start(motors[mtrID].htim, motors[mtrID].channel_fi);
-    HAL_TIM_PWM_Start(motors[mtrID].htim, motors[mtrID].channel_bi);
+  for (uint8_t i = 0; i < MOTOR_COUNT; i++) {
+    HAL_TIM_PWM_Start(mtrs[i].htim, mtrs[i].channel_fi);
+    HAL_TIM_PWM_Start(mtrs[i].htim, mtrs[i].channel_bi);
+  }
+}
 
-    /* Set initial speed to 0 (coast stop) */
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, 0);
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, 0);
+void mtr_Forward(MtrID_t mtr_id, uint8_t speed) {
+  if (mtr_id >= MOTOR_COUNT || speed > MAX_SPEED) {
+    return;
+  }
+
+  Mtr *mtr = &mtrs[mtr_id];
+  speed = (speed > MAX_SPEED) ? MAX_SPEED : speed;
+  
+  uint16_t pulse = (speed == 0) ? 0 : spd_Map(speed);
+
+  if (mtr->decay_mode == FAST_DECAY) {
+    /* Fast Decay: FI=PWM, BI=0 (brake during OFF time) */
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, pulse);
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, 0);
+  } else { // SLOW_DECAY
+    /* Slow Decay: FI=PWM, BI=complementary PWM (recirculate during OFF time)
+     * BI inverted to allow freewheeling through low-side FETs */
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, pulse);
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, PWM_MAX_VALUE - pulse);
+  }
+  
+  mtr->speed = speed;
+  mtr->direction = FORWARD;
+}
+
+void mtr_Backward(MtrID_t mtr_id, uint8_t speed) {
+  if (mtr_id >= MOTOR_COUNT || speed > MAX_SPEED) {
+    return;
+  }
+
+  Mtr *mtr = &mtrs[mtr_id];
+  speed = (speed > MAX_SPEED) ? MAX_SPEED : speed;
+  
+  uint16_t pulse = (speed == 0) ? 0 : spd_Map(speed);
+
+  if (mtr->decay_mode == FAST_DECAY) {
+    /* Fast Decay: FI=0, BI=PWM (brake during OFF time) */
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, 0);
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, pulse);
+  } else { // SLOW_DECAY
+    /* Slow Decay: FI=complementary PWM, BI=PWM (recirculate during OFF time)
+     * FI inverted to allow freewheeling through low-side FETs */
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, PWM_MAX_VALUE - pulse);
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, pulse);
+  }
+  
+  mtr->speed = speed;
+  mtr->direction = BACKWARD;
+}
+
+void mtr_Brake(MtrID_t mtr_id) {
+  if (mtr_id >= MOTOR_COUNT) {
+    return;
+  }
+
+  Mtr *mtr = &mtrs[mtr_id];
+
+  __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, PWM_MAX_VALUE);
+  __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, PWM_MAX_VALUE);
+  
+  mtr->speed = 0;
+  mtr->direction = BRAKE;
+}
+
+void mtr_Stop(MtrID_t mtr_id) {
+  if (mtr_id >= MOTOR_COUNT) {
+    return;
+  }
+
+  Mtr *mtr = &mtrs[mtr_id];
+
+  __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, 0);
+  __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, 0);
+  
+  mtr->speed = 0;
+  mtr->direction = STOP;
+}
+
+void mtr_SetDecayMode(MtrID_t mtr_id, DecayMode_t decay_mode) {
+  if (mtr_id >= MOTOR_COUNT) {
+    return;
+  }
+
+  mtrs[mtr_id].decay_mode = decay_mode;
+}
+
+MtrDir_t mtr_GetDirection(MtrID_t mtr_id) {
+  if (mtr_id >= MOTOR_COUNT) {
+    return STOP;
+  }
+  return mtrs[mtr_id].direction;
+}
+
+uint8_t mtr_GetSpeed(MtrID_t mtr_id) {
+  if (mtr_id >= MOTOR_COUNT) {
+    return 0;
+  }
+  return mtrs[mtr_id].speed;
+}
+
+/* Linear remapping: 1-100% speed → PWM_STARTUP_MIN to PWM_MAX_VALUE
+ * This ensures motor always gets sufficient voltage to overcome static friction
+ * Formula: pulse = PWM_STARTUP_MIN + (speed/100) * (PWM_MAX_VALUE - PWM_STARTUP_MIN) */
+uint32_t spd_Map(uint8_t speed) {
+  if (speed == 0) {
+    return 0;
+  }
+  if (speed > MAX_SPEED) {
+    speed = MAX_SPEED;
+  }
+  return PWM_STARTUP_MIN + ((uint32_t)speed * (PWM_MAX_VALUE - PWM_STARTUP_MIN)) / MAX_SPEED;
+}
+
+/* ============================================================================
+ * Test and Calibration Functions
+ * ========================================================================= */
+
+/**
+ * @brief Find the minimum PWM value required for motor startup
+ * @param mtr_id Motor ID to test
+ * @note This function tests PWM values from 10% to 70% in 2% increments
+ *       Observe the motor visually to determine when it starts rotating
+ *       PWM values are sent via UART for logging
+ */
+void mtr_FindMinimumStartupPWM(MtrID_t mtr_id) {
+  if (mtr_id >= MOTOR_COUNT) {
+    return;
+  }
+  
+  char buffer[64];
+  snprintf(buffer, sizeof(buffer), "\r\n=== Testing Motor %d ===\r\n", mtr_id);
+  dataUart_SendString(buffer);
+  
+  Mtr *mtr = &mtrs[mtr_id];
+  const uint16_t test_start = 400;  // Start at 40% (400/1000)
+  const uint16_t test_end = 700;    // End at 70% (700/1000)
+  const uint16_t test_step = 20;    // Step by 2% (20/1000)
+  
+  for (uint16_t pwm = test_start; pwm <= test_end; pwm += test_step) {
+    float duty_percent = (pwm * 100.0f) / PWM_MAX_VALUE;
     
-    /* Initialize state tracking */
-    motor_direction[mtrID] = MOTOR_STOP;
-    motor_speed[mtrID] = 0.0f;
-  }
-}
-
-// Set motor speed with direction (positive speed = forward)
-void Mtr_SetSpeed(MtrID_t mtrID, MtrDirection_t direction, float speed_percent) {
-  /* Validate motor ID */
-  if (mtrID >= MOTOR_COUNT) { 
-    return; 
-  }
-
-  /* Clamp speed to valid range [0, 100] */
-  if (speed_percent < 0.0f) {
-    speed_percent = 0.0f;
-  } else if (speed_percent > 100.0f) {
-    speed_percent = 100.0f;
-  }
-
-  /* Calculate PWM duty cycle */
-  const uint32_t pwm_value = (uint32_t)((speed_percent / 100.0f) * PWM_MAX_VALUE);
-  
-  /* Update state tracking */
-  motor_direction[mtrID] = direction;
-  motor_speed[mtrID] = speed_percent;
-
-  /* Set H-bridge control signals based on direction */
-  switch (direction) {
-  case MOTOR_FORWARD:
-    /* FI=PWM, BI=0 -> Forward rotation */
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, pwm_value);
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, 0);
-    break;
+    /* Send current test PWM via UART */
+    snprintf(buffer, sizeof(buffer), "PWM: %4u (%.1f%%)\r\n", pwm, duty_percent);
+    dataUart_SendString(buffer);
     
-  case MOTOR_BACKWARD:
-    /* FI=0, BI=PWM -> Backward rotation */
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, 0);
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, pwm_value);
-    break;
-    
-  case MOTOR_BRAKE:
-    /* FI=PWM, BI=PWM -> Active braking */
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, pwm_value);
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, pwm_value);
-    break;
-    
-  case MOTOR_STOP:
-  default:
-    /* FI=0, BI=0 -> Coast stop */
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, 0);
-    __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, 0);
-    motor_speed[mtrID] = 0.0f;
-    break;
-  }
-}
-
-void Mtr_Stop(MtrID_t mtrID) {
-  if (mtrID >= MOTOR_COUNT) return;
-  
-  /* Coast stop: FI = 0, BI = 0 */
-  __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, 0);
-  __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, 0);
-  
-  /* Update state */
-  motor_direction[mtrID] = MOTOR_STOP;
-  motor_speed[mtrID] = 0.0f;
-}
-
-void Mtr_Brake(MtrID_t mtrID) {
-  if (mtrID >= MOTOR_COUNT) return;
-  
-  /* Active brake: FI = MAX, BI = MAX */
-  __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_fi, PWM_MAX_VALUE);
-  __HAL_TIM_SET_COMPARE(motors[mtrID].htim, motors[mtrID].channel_bi, PWM_MAX_VALUE);
-  
-  /* Update state */
-  motor_direction[mtrID] = MOTOR_BRAKE;
-  motor_speed[mtrID] = 100.0f;
-}
-
-void Mtrs_BrakeAll(void) {
-  for (MtrID_t mtrID = 0; mtrID < MOTOR_COUNT; mtrID++) {
-    Mtr_Brake(mtrID);
-  }
-}
-
-// advanced functions
-void mtrs_Set(float spd1, float spd2, float spd3, float spd4) {
-  /* Helper to determine direction from signed speed */
-  const float speeds[MOTOR_COUNT] = {spd1, spd2, spd3, spd4};
-  
-  for (MtrID_t i = 0; i < MOTOR_COUNT; i++) {
-    MtrDirection_t dir;
-    if (speeds[i] > 0) {
-      dir = MOTOR_FORWARD;
-    } else if (speeds[i] < 0) {
-      dir = MOTOR_BACKWARD;
+    /* Apply PWM directly without minimum threshold enforcement */
+    if (mtr->decay_mode == FAST_DECAY) {
+      __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, pwm);
+      __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, 0);
     } else {
-      dir = MOTOR_STOP;
+      __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, pwm);
+      __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, PWM_MAX_VALUE - pwm);
     }
-    Mtr_SetSpeed(i, dir, fabsf(speeds[i]));
+    
+    HAL_Delay(800);  // Run for 0.8 seconds
+    
+    /* Stop motor */
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_fi, 0);
+    __HAL_TIM_SET_COMPARE(mtr->htim, mtr->channel_bi, 0);
+    
+    HAL_Delay(400);  // Rest for 0.4 seconds
+  }
+  
+  dataUart_SendString("=== Test Complete ===\r\n\r\n");
+  
+  /* Ensure motor is stopped */
+  mtr_Stop(mtr_id);
+}
+
+/**
+ * @brief Test all motors sequentially to find minimum startup PWM
+ * @note Tests each motor from front-left to rear-right
+ *       Results are sent via UART - total time: ~2 minutes
+ */
+void mtr_TestAllMotors(void) {
+  for (MtrID_t id = MTR0; id < MOTOR_COUNT; id++) {
+    HAL_Delay(2000);  // 2 second delay between motors
+    mtr_FindMinimumStartupPWM(id);
+    HAL_Delay(1000);  // 1 second pause after each motor
   }
 }
 
-// Mecanum wheel polar movement (angle in degrees, speed in percent)
-void polar_Move(float angle_deg, float speed_percent) {
-  /* Convert to radians and normalize */
-  const float angle_rad = angle_deg * (M_PI / 180.0f);
-  const float normalized_speed = speed_percent / 100.0f;
-  
-  /* Phase offset for mecanum kinematics */
-  const float phase_offset = M_PI / 4.0f;
-  
-  /* Calculate individual motor speeds using mecanum kinematic equations */
-  const float spd0 = normalized_speed * sinf(angle_rad + phase_offset) * 100.0f;
-  const float spd1 = normalized_speed * sinf(angle_rad - phase_offset) * 100.0f;
-  const float spd2 = normalized_speed * sinf(angle_rad - phase_offset) * 100.0f;
-  const float spd3 = normalized_speed * sinf(angle_rad + phase_offset) * 100.0f;
-  
-  /* Apply to motors (with sign corrections for motor mounting) */
-  mtrs_Set(-spd1, spd0, spd2, -spd3);
-}
-
-// Motor test function - smooth acceleration/deceleration
-void mtrTest(void) {
-  const float accel_step = 1.0f;       /* 1% per step */
-  const uint32_t step_delay = 50;      /* 50ms per step = 5 seconds total */
-  
-  /* Smooth acceleration forward */
-  for (float speed = 0.0f; speed <= 100.0f; speed += accel_step) {
-    Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
-    HAL_Delay(step_delay);
-  }
-  
-  HAL_Delay(500);
-
-  /* Smooth deceleration backward */
-  for (float speed = 100.0f; speed >= 0.0f; speed -= accel_step) {
-    Mtr_SetSpeed(MTR1, MOTOR_BACKWARD, speed);
-    HAL_Delay(step_delay);
+void mtr_TestAcceleration(MtrID_t mtr_id, uint8_t step, uint8_t max_speed) {
+  if (mtr_id >= MOTOR_COUNT || step == 0) {
+    return;
   }
 
-  HAL_Delay(200);
-
-  /* Test active braking */
-  for (float speed = 0.0f; speed <= 100.0f; speed += accel_step) {
-    Mtr_SetSpeed(MTR1, MOTOR_FORWARD, speed);
-    HAL_Delay(step_delay);
+  // Forward acceleration and deceleration
+  for (uint8_t spd = 0; spd <= max_speed; spd += step) {
+    mtr_Forward(mtr_id, spd);
+    HAL_Delay(20);
   }
   HAL_Delay(500);
-  Mtr_Brake(MTR1);
+  for (int8_t spd = max_speed; spd >= 0; spd -= step) {
+    mtr_Forward(mtr_id, spd);
+    HAL_Delay(20);
+  }
   HAL_Delay(500);
-  Mtr_Stop(MTR1);
+
+  // Backward acceleration and deceleration
+  for (uint8_t spd = 0; spd <= max_speed; spd += step) {
+    mtr_Backward(mtr_id, spd);
+    HAL_Delay(20);
+  }
+  HAL_Delay(500);
+  for (int8_t spd = max_speed; spd >= 0; spd -= step) {
+    mtr_Backward(mtr_id, spd);
+    HAL_Delay(20);
+  }
+  
+  mtr_Stop(mtr_id);
 }

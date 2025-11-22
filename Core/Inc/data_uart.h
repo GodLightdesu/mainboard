@@ -6,6 +6,8 @@
 #include <stdint.h>
 
 void dataUart_Init(UART_HandleTypeDef *huart);
+void dataUart_SendString(const char *str);
+void dataUart_SendFormattedPWM(uint16_t pwm, float duty_percent);
 
 HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size);
 HAL_StatusTypeDef DisplayRawHexData(const uint8_t *data, uint16_t size);
