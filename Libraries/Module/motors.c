@@ -17,7 +17,7 @@ void Mtrs_Init(void) {
 
 /* Motor basic control functions */
 void mtr_Forward(MtrID_t mtr_id, uint8_t speed) {
-  if (mtr_id >= MOTOR_COUNT || speed > MAX_SPEED) {
+  if (mtr_id >= MOTOR_COUNT) {
     return;
   }
 
@@ -41,7 +41,7 @@ void mtr_Forward(MtrID_t mtr_id, uint8_t speed) {
 }
 
 void mtr_Backward(MtrID_t mtr_id, uint8_t speed) {
-  if (mtr_id >= MOTOR_COUNT || speed > MAX_SPEED) {
+  if (mtr_id >= MOTOR_COUNT) {
     return;
   }
 
@@ -130,17 +130,19 @@ uint32_t spd_Map(uint8_t speed) {
 
 /* Motor advanced control functions */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
-  int spds[MOTOR_COUNT] = {spd0, spd1, spd2, spd3};
-  for (int i = 0; i < MOTOR_COUNT; i++) {
+  const int spds[MOTOR_COUNT] = {spd0, spd1, spd2, spd3};
+  
+  for (uint8_t i = 0; i < MOTOR_COUNT; i++) {
     int speed = spds[i];
-    uint8_t abs_speed;
-
+    
+    /* Clamp to valid range [-255, 255] */
+    if (speed > 255) speed = 255;
+    if (speed < -255) speed = -255;
+    
     if (speed > 0) {
-      abs_speed = (speed > 255) ? 255 : (uint8_t)speed;
-      mtr_Forward((MtrID_t)i, abs_speed);
+      mtr_Forward((MtrID_t)i, (uint8_t)speed);
     } else if (speed < 0) {
-      abs_speed = (-speed > 255) ? 255 : (uint8_t)(-speed);
-      mtr_Backward((MtrID_t)i, abs_speed);
+      mtr_Backward((MtrID_t)i, (uint8_t)(-speed));
     } else {  /* speed == 0 */
       mtr_Stop((MtrID_t)i);
     }
@@ -148,14 +150,19 @@ void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
 }
 
 void polarMove(float angle_deg, uint8_t speed_percent) {
-  speed_percent = (speed_percent > MAX_SPEED) ? MAX_SPEED : speed_percent;
+  /* Validate and clamp speed */
+  if (speed_percent > MAX_SPEED) {
+    speed_percent = MAX_SPEED;
+  }
+  
+  /* Convert angle to radians */
   const float angle_rad = angle_deg * (M_PI / 180.0f);
-  const float phase_offset = M_PI / 4.0f;
+  const float phase_offset = M_PI / 4.0f;  /* 45 degrees for mecanum wheels */
 
   /* Calculate with deadzone and rounding */
-  const float DEADZONE = 0.5f; // Smaller deadzone since we're rounding
+  const float DEADZONE = 0.5f; /* Smaller deadzone since we're rounding */
 
-  /* Calculate as floats */
+  /* Calculate motor speeds using mecanum kinematics */
   float calcA = speed_percent * sinf(angle_rad + phase_offset);
   float calcB = speed_percent * sinf(angle_rad - phase_offset);
   
@@ -163,6 +170,7 @@ void polarMove(float angle_deg, uint8_t speed_percent) {
   int spdA = (fabsf(calcA) < DEADZONE) ? 0 : (int)roundf(calcA);
   int spdB = (fabsf(calcB) < DEADZONE) ? 0 : (int)roundf(calcB);
   
+  /* Set motor speeds: FL, FR, RL, RR */
   mtrs_Set4Speed(-spdB, spdA, spdB, -spdA);
 }
 

@@ -148,50 +148,29 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1) {
     const uint32_t currentTime = HAL_GetTick();
-    
-    /* Process I2C Master state machine (handles sequential polling) */
-    I2C_Master_Process(&i2cMaster);
-    
     /* Status LED heartbeat (non-blocking) */
     if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
       HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
       lastLedToggleTime = currentTime;
     }
 
-    /* Process IR sensor data when ready (any slave) */
-    for (uint8_t slaveId = 0; slaveId < IR_SLAVES_NO; slaveId++) {
-      if (IR_IsDataReady(slaveId)) {
-        /* Update max eye tracking */
-        updateIRValues(slaveId);
-        
-        /* Transmit results via UART */
-        char outputStr[100];
-        int len = snprintf(outputStr, sizeof(outputStr), 
-                           "Slave%d Eye:%d Val:%d\r\n", 
-                           slaveId, maxEye, maxValue);
-        HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, 100);
-        
-        /* Clear data ready flag to allow next read */
-        IR_ClearDataReady(slaveId);
-      }
-    }
-    uint8_t spd = 60;
-    float angle_deg = 0.0f;
-    switch (maxEye) {
-    case 0: case 6: angle_deg = 180.0f; break;
-    case 1: case 2: angle_deg = 90.0f;  break;
-    case 5: case 4: angle_deg = 270.0f; break;
-    case 3: angle_deg = 0.0f; break;
-    default:
-      angle_deg = 0.0f;
-      spd = 0;
-    }
-    /* Stop if no valid detection */
-    if (maxValue < 10) { spd = 0; }
-    polarMove(angle_deg, spd);
-
-    HAL_Delay(10);  /* Small delay to reduce CPU usage */
+    I2C_Master_Process(&i2cMaster);
     
+    // /* Control logic based on IR sensor readings */
+    // uint8_t spd = 60;
+    // float angle_deg = 0.0f;
+    // /* Map detected eye to movement direction */
+    // switch (maxEye) {
+    // case 0: case 6: angle_deg = 180.0f; break;
+    // case 1: case 2: angle_deg = 90.0f; break;
+    // case 5: case 4: angle_deg = 270.0f; break;
+    // case 3:  angle_deg = 0.0f; break;
+    // default: spd = 0; break;
+    // }
+    // if (maxValue < IR_DETECTION_THRESHOLD) { spd = 0; }
+    // polarMove(angle_deg, spd);
+
+    HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

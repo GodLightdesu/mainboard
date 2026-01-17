@@ -3,6 +3,8 @@
 
 #include "i2c_master.h"
 #include "const.h"
+#include "usart.h"
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
@@ -27,7 +29,7 @@ extern uint16_t maxValue;   /**< Maximum sensor value */
 
 void IR_Init(I2C_Master_t *i2cMaster);
 
-HAL_StatusTypeDef IR_ReadData(Slave_ID slaves_id);
+StatusTypeDef IR_ReadData(Slave_ID slaves_id);
 
 bool IR_IsDataReady(Slave_ID slave_id);
 

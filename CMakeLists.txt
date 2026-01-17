@@ -12,7 +12,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
-
 # Define the build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
@@ -39,6 +38,7 @@ add_subdirectory(cmake/stm32cubemx)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
+
     # Add user defined library search paths
 )
 
@@ -46,16 +46,20 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/main.c
-    Core/Src/data_uart.c
-    Core/Src/i2c_master.c
-    Core/Src/motors.c
-    Core/Src/ir.c
+    Libraries/Uart/data_uart.c
+    Libraries/I2C/i2c_master.c
+    Libraries/Module/motors.c
+    Libraries/Module/ir.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Core/Inc
+    Libraries/Module
+    Libraries/Uart
+    Libraries/I2C
+    Libraries/
 )
 
 # Add project symbols (macros)
