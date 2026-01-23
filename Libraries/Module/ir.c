@@ -15,7 +15,7 @@ uint8_t maxEye = 0;
 uint16_t maxValue = 0;
 
 static void IR_DataReadyCallback(uint8_t slaveId, uint8_t* data, uint16_t size) {
-  if (data == NULL || size < IR_BUFFER_SIZE || slaveId >= IR_SLAVES_NO) {
+  if (data == NULL || size != IR_BUFFER_SIZE || slaveId >= IR_SLAVES_NO) {
     return;
   }
   
@@ -67,63 +67,4 @@ void IR_Init(I2C_Master_t *i2cMaster) {
   maxEye = 0;
   maxValue = 0;
   memset(eyeValues, 0, sizeof(eyeValues));
-}
-
-StatusTypeDef IR_ReadData(Slave_ID slaves_id) {
-  if (g_i2cMaster == NULL || slaves_id >= IR_SLAVES_NO) {
-    return PARAMETER;
-  }
-  
-  return I2C_Master_ReadSlave(g_i2cMaster, slaves_id);
-}
-
-bool IR_IsDataReady(Slave_ID slave_id) {
-  if (g_i2cMaster == NULL) {
-    return false;
-  }
-  return I2C_Master_IsDataReady(g_i2cMaster, slave_id);
-}
-
-void IR_ClearDataReady(Slave_ID slave_id) {
-  if (g_i2cMaster == NULL) {
-    return;
-  }
-  I2C_Master_ClearDataReady(g_i2cMaster, slave_id);
-}
-
-void updateIRValues(Slave_ID slave_id) {
-  if (g_i2cMaster == NULL || slave_id >= IR_SLAVES_NO) {
-    return;
-  }
-  
-  if (!IR_IsDataReady(slave_id)) {
-    return;
-  }
-
-  uint8_t *buffer = I2C_Master_GetProcessBuffer(g_i2cMaster, slave_id);
-  if (buffer == NULL) { return; }
-
-  for (uint8_t eye = 0; eye < EYE_NUM; eye++) {
-    /* Buffer layout: [Vref_LSB, Vref_MSB, eye0_LSB, eye0_MSB, ...] */
-    const uint8_t base_idx = 2 + (eye * 2);
-    
-    if (base_idx + 1 >= IR_BUFFER_SIZE) { break; }
-    
-    const uint8_t lsb = buffer[base_idx];
-    const uint8_t msb = buffer[base_idx + 1];
-    
-    const uint16_t global_eye_idx = (uint16_t)(slave_id * EYE_NUM + eye);
-    if (global_eye_idx < (IR_SLAVES_NO * EYE_NUM)) {
-      eyeValues[global_eye_idx] = combine_data(msb, lsb);
-    }
-  }
-
-  maxValue = 0;
-  maxEye = 0;
-  for (uint8_t i = 0; i < (IR_SLAVES_NO * EYE_NUM); i++) {
-    if (eyeValues[i] > maxValue) {
-      maxValue = eyeValues[i];
-      maxEye = i;
-    }
-  }
 }

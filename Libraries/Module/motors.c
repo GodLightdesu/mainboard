@@ -135,9 +135,9 @@ void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
   for (uint8_t i = 0; i < MOTOR_COUNT; i++) {
     int speed = spds[i];
     
-    /* Clamp to valid range [-255, 255] */
-    if (speed > 255) speed = 255;
-    if (speed < -255) speed = -255;
+    /* Clamp to valid range [-MAX_SPEED, MAX_SPEED] */
+    if (speed > MAX_SPEED) speed = MAX_SPEED;
+    if (speed < -MAX_SPEED) speed = -MAX_SPEED;
     
     if (speed > 0) {
       mtr_Forward((MtrID_t)i, (uint8_t)speed);

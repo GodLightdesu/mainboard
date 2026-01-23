@@ -33,7 +33,7 @@ HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size) {
     return HAL_ERROR;
   }
   
-  if (size % 2 != 0) {
+  if (size % 2 != 0 || size > 32) {  /* Limit to 16 values max */
     return HAL_ERROR;
   }
   

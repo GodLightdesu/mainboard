@@ -27,14 +27,11 @@ typedef enum {
 extern uint8_t maxEye;      /**< Index of sensor with maximum value */
 extern uint16_t maxValue;   /**< Maximum sensor value */
 
+/**
+ * @brief Initialize IR sensor module with I2C master
+ * @param i2cMaster Pointer to I2C master instance
+ * @note Automatically registers slaves and sets up callbacks for sequential mode
+ */
 void IR_Init(I2C_Master_t *i2cMaster);
-
-StatusTypeDef IR_ReadData(Slave_ID slaves_id);
-
-bool IR_IsDataReady(Slave_ID slave_id);
-
-void IR_ClearDataReady(Slave_ID slave_id);
-
-void updateIRValues(Slave_ID slave_id);
 
 #endif /* IR_H */

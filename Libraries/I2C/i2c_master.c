@@ -83,15 +83,23 @@ StatusTypeDef I2C_Master_Process(I2C_Master_t *master) {
     if (master->sequentialMode && (currentTime - master->lastPollTime) >= master->pollInterval) {
       uint8_t currentIndex = (master->activeSlaveId == 0xFF) ? 0 : (master->activeSlaveId + 1) % master->slaveCount;
       
+      /* Try to read the next slave in sequence */
       if (master->slaves[currentIndex].enabled) {
         StatusTypeDef status = I2C_Master_ReadSlave(master, currentIndex);
         if (status == ALL_OK) {
           master->lastPollTime = currentTime;
           return BUSY;
+        } else if (status == BUSY) {
+          return BUSY;
         }
-        return status;
+        /* If error, retry sooner */
+        master->lastPollTime = currentTime - master->pollInterval + 5;
+      } else {
+        /* Slave disabled, move to next immediately */
+        master->activeSlaveId = currentIndex;
+        master->lastPollTime = currentTime - master->pollInterval;
+        return ALL_OK;
       }
-      master->activeSlaveId = currentIndex;
     }
     return ALL_OK;
   
@@ -212,6 +220,9 @@ void I2C_Master_RxCallback(I2C_Master_t *master, I2C_HandleTypeDef *hi2c) {
   if (master == NULL || hi2c != master->hi2c) {
     return;
   }
+  
+  /* Cache invalidation not needed: DMA buffer region (0x30000000) is configured
+   * as non-cacheable in MPU settings (see MPU_Config in main.c) */
   
   master->state = I2C_STATE_PROCESSING;
 }
