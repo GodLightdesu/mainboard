@@ -47,16 +47,15 @@
 #define MPU6050_ACCEL_SENS_8G     4096.0f  // ±8g  → LSB/g
 #define MPU6050_ACCEL_SENS_16G    2048.0f  // ±16g → LSB/g
 
-#include "i2c_common.h"
-#include "data_uart.h"
 #include "const.h"
 #include "usart.h"
 #include <stdio.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <string.h>
+#include <stdbool.h>
+#include "i2c_common.h"
 
-typedef struct 
+typedef struct MPU6050_t 
 {
   bool dataReady;
   float ax, ay, az;
@@ -78,4 +77,4 @@ void MPU6050_RxCallback(I2C_HandleTypeDef *hi2c);
 
 void MPU6050_ErrorCallback(I2C_HandleTypeDef *hi2c);
 
-#endif
+#endif // MPU6050_H

@@ -5,7 +5,6 @@
 #define LED_HEARTBEAT_MS        100U
 #define IR_SAMPLE_PERIOD_MS     20U
 #define MAIN_LOOP_DELAY_MS      1U
-#define IR_DETECTION_THRESHOLD  10U
 
 #define DMA_BUFFER_ADDRESS 0x30000000
 #define DMA_CACHE_LINE_SIZE 32  /**< STM32H7 D-Cache line size */

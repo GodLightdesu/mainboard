@@ -2,7 +2,6 @@
 #define I2C_COMMON_H
 
 #include "i2c.h"
-#include "data_uart.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>

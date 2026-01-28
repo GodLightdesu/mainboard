@@ -1,5 +1,5 @@
 #include "motors.h"
-#include "data_uart.h"  /* For UART output */
+#include "data_uart.h"
 
 static Mtr mtrs[MOTOR_COUNT] = {
   { &htim1, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 0 (Front Left)
@@ -172,6 +172,10 @@ void polarMove(float angle_deg, uint8_t speed_percent) {
   
   /* Set motor speeds: FL, FR, RL, RR */
   mtrs_Set4Speed(-spdB, spdA, spdB, -spdA);
+}
+
+void mtrs_StopAll(void) {
+  mtrs_Set4Speed(0, 0, 0, 0);
 }
 
 /* ============================================================================

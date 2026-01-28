@@ -1,15 +1,18 @@
 #ifndef MPU6050_DMP_H
 #define MPU6050_DMP_H
 
-#include "mpu6050.h"
-#include <stdint.h>
-#include <stdbool.h>
-
 /* DMP Configuration */
 #define DMP_FEATURE_6X_LP_QUAT          0x0001  // 6-axis quaternion (accel + gyro)
 #define DMP_FEATURE_GYRO_CAL            0x0002  // Gyroscope calibration
 #define DMP_FEATURE_SEND_RAW_ACCEL      0x0004  // Send raw accelerometer data
 #define DMP_FEATURE_SEND_RAW_GYRO       0x0008  // Send raw gyroscope data
+
+#include <math.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include "i2c.h"
+#include "mpu6050.h"
 
 /**
  * @brief DMP quaternion data structure
@@ -30,10 +33,12 @@ typedef struct {
 /**
  * @brief DMP data structure
  */
-typedef struct {
+typedef struct MPU6050_DMP_t {
   bool ready;
+  bool calibrated;
   Quaternion_t quaternion;
   EulerAngles_t euler;
+  float gyroBias[3];
   int16_t accel[3];  // Raw accelerometer data
   int16_t gyro[3];   // Raw gyroscope data
 } MPU6050_DMP_t;
@@ -69,10 +74,23 @@ bool MPU6050_DMP_GetQuaternion(Quaternion_t *quat);
 bool MPU6050_DMP_GetEulerAngles(EulerAngles_t *euler);
 
 /**
+ * @brief Calibrate gyroscope zero-point offsets
+ * @param samples Number of samples to average (default: 100)
+ * @note Keep sensor stationary during calibration
+ */
+void MPU6050_DMP_CalibrateGyro(uint16_t samples);
+
+/**
+ * @brief Reset yaw angle to zero
+ * @note Use this to prevent yaw drift accumulation
+ */
+void MPU6050_DMP_ResetYaw(void);
+
+/**
  * @brief Convert quaternion to Euler angles
  * @param quat Input quaternion
  * @param euler Output Euler angles
  */
 void MPU6050_QuaternionToEuler(const Quaternion_t *quat, EulerAngles_t *euler);
 
-#endif /* MPU6050_DMP_H */
+#endif // MPU6050_DMP_H

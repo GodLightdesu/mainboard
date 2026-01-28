@@ -8,6 +8,14 @@
 #define EYE_NUM 7               /**< Number of IR sensors per slave */
 #define IR_SLAVES_NO 2          /**< Number of I2C slave devices */
 
+/* Ball detection threshold */
+#define IR_DETECTION_THRESHOLD 100  /**< Minimum signal strength to consider ball detected */
+
+/* Mathematical constants */
+#ifndef M_PI
+#define M_PI 3.14159265358979323846f
+#endif
+
 /* I2C slave addresses */
 #define IR_SLAVE_1_ADDR (0x30 << 1)
 #define IR_SLAVE_2_ADDR (0x31 << 1)
@@ -15,6 +23,7 @@
 #include "i2c_common.h"
 #include "const.h"
 #include "usart.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -28,10 +37,11 @@ typedef enum {
 /**
  * @brief IR module structure
  */
-typedef struct {
+typedef struct IR_t {
   bool dataReady;                          /**< Flag indicating if new data is available */
   uint8_t maxEye;                          /**< Index of sensor with maximum value */
   uint16_t maxValue;                       /**< Maximum sensor value */
+  float ballAngle;                         /**< Ball angle in degrees (0-360°), auto-updated via interpolation method, -1.0f if no ball */
   uint16_t eyeValues[IR_SLAVES_NO * EYE_NUM]; /**< All sensor values */
   
   /* I2C management using common state machine */
@@ -65,5 +75,23 @@ void IR_RxCallback(I2C_HandleTypeDef *hi2c);
  * @param hi2c I2C handle that had error
  */
 void IR_ErrorCallback(I2C_HandleTypeDef *hi2c);
+
+/**
+ * @brief Calculate ball angle using weighted average method
+ * @return Ball angle in degrees (0-360°), or -1.0f if no ball detected
+ * @note Uses all sensor values above threshold for weighted calculation
+ * @note Recommended for soccer robots - more accurate when ball is close
+ * @note IR.ballAngle is auto-updated using interpolation method, call this for alternative calculation
+ */
+float IR_CalBallAngle(void);
+
+/**
+ * @brief Calculate ball angle using three-point interpolation
+ * @return Ball angle in degrees (0-360°), or -1.0f if no ball detected
+ * @note Uses parabolic interpolation between max and adjacent sensors
+ * @note Highest precision - recommended when ball is between sensors
+ * @note This method is automatically called in IR_DataProcessCallback to update IR.ballAngle
+ */
+float IR_CalBallAngleInterpolated(void);
 
 #endif /* IR_H */

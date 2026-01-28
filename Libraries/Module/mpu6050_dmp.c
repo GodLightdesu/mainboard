@@ -1,10 +1,7 @@
 #include "mpu6050_dmp.h"
 #include "data_uart.h"
-#include <math.h>
-#include <string.h>
 
 MPU6050_DMP_t MPU6050_DMP = {0};
-
 /**
  * @brief Simple complementary filter for orientation estimation
  */
@@ -25,6 +22,11 @@ static void ComplementaryFilter(void) {
     MPU6050_DMP.euler.pitch = pitch;
     MPU6050_DMP.euler.yaw = 0.0f;
     
+    // Initialize gyro bias if not calibrated
+    if (!MPU6050_DMP.calibrated) {
+      memset(MPU6050_DMP.gyroBias, 0, sizeof(MPU6050_DMP.gyroBias));
+    }
+    
     initialized = true;
     lastTime = now;
     return;
@@ -35,10 +37,15 @@ static void ComplementaryFilter(void) {
   
   if (dt > 0.5f) dt = 0.01f;  // Prevent large jumps
   
-  // Gyroscope integration
-  float gyroRoll = MPU6050_DMP.euler.roll + MPU6050.gx * dt;
-  float gyroPitch = MPU6050_DMP.euler.pitch + MPU6050.gy * dt;
-  float gyroYaw = MPU6050_DMP.euler.yaw + MPU6050.gz * dt;
+  // Apply gyro bias calibration
+  float gx_calibrated = MPU6050.gx - MPU6050_DMP.gyroBias[0];
+  float gy_calibrated = MPU6050.gy - MPU6050_DMP.gyroBias[1];
+  float gz_calibrated = MPU6050.gz - MPU6050_DMP.gyroBias[2];
+  
+  // Gyroscope integration with calibrated data
+  float gyroRoll = MPU6050_DMP.euler.roll + gx_calibrated * dt;
+  float gyroPitch = MPU6050_DMP.euler.pitch + gy_calibrated * dt;
+  float gyroYaw = MPU6050_DMP.euler.yaw + gz_calibrated * dt;
   
   // Accelerometer angles
   float accelRoll = atan2f(MPU6050.ay, MPU6050.az) * 180.0f / M_PI;
@@ -72,21 +79,100 @@ static void ComplementaryFilter(void) {
   /* Print attitude at controlled interval */
   static uint32_t lastPrintTime = 0;
   if (now - lastPrintTime >= 100) {  // Print every 100ms
-    dataUart_PrintMPU6050Attitude(MPU6050_DMP.euler.roll, 
-                                  MPU6050_DMP.euler.pitch, 
-                                  MPU6050_DMP.euler.yaw);
+    dataUart_PrintMPU6050Attitude(&MPU6050_DMP);
     lastPrintTime = now;
   }
 }
 
 bool MPU6050_DMP_Init(I2C_HandleTypeDef *hi2c, uint16_t features) {
   if (hi2c == NULL) return false;
-  
+
   memset(&MPU6050_DMP, 0, sizeof(MPU6050_DMP_t));
-  
+  MPU6050_DMP_CalibrateGyro(100);
   dataUart_PrintInitMessage("MPU6050: Complementary Filter");
   
   return true;
+}
+
+/**
+ * @brief Calibrate gyroscope zero-point offsets
+ * @param samples Number of samples to average (default: 100)
+ * @note Keep sensor stationary during calibration
+ */
+void MPU6050_DMP_CalibrateGyro(uint16_t samples) {
+  if (samples == 0) samples = 100;
+  
+  float sum_gx = 0, sum_gy = 0, sum_gz = 0;
+  uint16_t valid_samples = 0;
+  
+  dataUart_PrintInitMessage("Gyro Calibration: Keep sensor stationary!");
+  HAL_Delay(300); // Give user time to place sensor
+  
+  for (uint16_t i = 0; i < samples + 10; i++) {
+    // Skip first 10 samples
+    if (i < 10) {
+      HAL_Delay(10);
+      continue;
+    }
+    
+    // Wait for new data
+    while (!MPU6050.dataReady) {
+      MPU6050_Process();
+      HAL_Delay(1);
+    }
+    
+    sum_gx += MPU6050.gx;
+    sum_gy += MPU6050.gy;
+    sum_gz += MPU6050.gz;
+    valid_samples++;
+    
+    MPU6050.dataReady = false;
+    HAL_Delay(10);
+  }
+  
+  // Calculate average bias
+  MPU6050_DMP.gyroBias[0] = sum_gx / valid_samples;
+  MPU6050_DMP.gyroBias[1] = sum_gy / valid_samples;
+  MPU6050_DMP.gyroBias[2] = sum_gz / valid_samples;
+  
+  // Save calibration for persistence (could be stored in flash)
+  MPU6050_DMP.calibrated = true;
+  
+  char buffer[100];
+  snprintf(buffer, sizeof(buffer), 
+            "Gyro Bias: X:%.2f, Y:%.2f, Z:%.2f deg/s", 
+            MPU6050_DMP.gyroBias[0], 
+            MPU6050_DMP.gyroBias[1], 
+            MPU6050_DMP.gyroBias[2]);
+  dataUart_PrintInitMessage(buffer);
+}
+
+/**
+ * @brief Reset yaw angle to zero
+ * @note Use this to prevent yaw drift accumulation
+ */
+void MPU6050_DMP_ResetYaw(void) {
+  // Store current roll and pitch
+  float roll = MPU6050_DMP.euler.roll;
+  float pitch = MPU6050_DMP.euler.pitch;
+  
+  // Reset yaw to 0
+  MPU6050_DMP.euler.yaw = 0.0f;
+  
+  // Recalculate quaternion with zero yaw
+  float cy = cosf(0.0f);
+  float sy = sinf(0.0f);
+  float cp = cosf(pitch * M_PI / 360.0f);
+  float sp = sinf(pitch * M_PI / 360.0f);
+  float cr = cosf(roll * M_PI / 360.0f);
+  float sr = sinf(roll * M_PI / 360.0f);
+  
+  MPU6050_DMP.quaternion.w = cr * cp * cy + sr * sp * sy;
+  MPU6050_DMP.quaternion.x = sr * cp * cy - cr * sp * sy;
+  MPU6050_DMP.quaternion.y = cr * sp * cy + sr * cp * sy;
+  MPU6050_DMP.quaternion.z = cr * cp * sy - sr * sp * cy;
+  
+  dataUart_PrintInitMessage("Yaw angle reset to 0");
 }
 
 bool MPU6050_DMP_Update(void) {

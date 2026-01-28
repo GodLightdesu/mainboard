@@ -1,52 +1,74 @@
-                         #include "ir.h"
+#include "ir.h"
+#include "data_uart.h"
 
-/* Global IR instance */
+
+/* 全域 IR 實例 */
 IR_t IR = {0};
 
-/* Track which slaves have fresh data in current polling cycle */
+/* 追蹤當前輪詢週期中哪些從設備有新資料 */
 static uint8_t freshDataMask = 0;
 
-/* DMA buffers using predefined RAM_D2 addresses from const.h */
+/* 使用 const.h 中預定義的 RAM_D2 位址的 DMA 緩衝區 */
 static uint8_t *rxBuffer1 = IR_SLAVE1_RXBUF_PTR;
 static uint8_t *rxBuffer2 = IR_SLAVE2_RXBUF_PTR;
 static uint8_t processBuffer1[IR_BUFFER_SIZE];
 static uint8_t processBuffer2[IR_BUFFER_SIZE];
 
-/* Helper function to combine MSB and LSB */
+/* 每個感測器的角度位置 */
+static const float EYE_ANGLE_OFFEST = 11.3f;
+static const float EYE_ANGLE_DIFF = 30.0f;
+static const float EYE_ANGLES[14] = {
+  0.0f + EYE_ANGLE_OFFEST,   // 0°
+  EYE_ANGLE_DIFF + EYE_ANGLE_OFFEST,
+  EYE_ANGLE_DIFF * 2 + EYE_ANGLE_OFFEST, 
+  EYE_ANGLE_DIFF * 3,        // 90°
+  EYE_ANGLE_DIFF * 4 + EYE_ANGLE_OFFEST,
+  EYE_ANGLE_DIFF * 5 + EYE_ANGLE_OFFEST,
+  180.0f - EYE_ANGLE_OFFEST, // 從設備 1 (0-6)
+  180.0f + EYE_ANGLE_OFFEST, // 從設備 2 (7-13)
+  EYE_ANGLE_DIFF * 7 + EYE_ANGLE_OFFEST,
+  EYE_ANGLE_DIFF * 8 + EYE_ANGLE_OFFEST, 
+  EYE_ANGLE_DIFF * 9,       // 270°
+  EYE_ANGLE_DIFF * 10 + EYE_ANGLE_OFFEST,
+  EYE_ANGLE_DIFF * 11 - EYE_ANGLE_OFFEST,
+  360.0f - EYE_ANGLE_OFFEST
+};
+
+/* 輔助函數：組合 MSB 和 LSB */
 static uint16_t combine_data(uint8_t msb, uint8_t lsb) { 
   return (uint16_t)((msb << 8) | lsb);
 }
 
-/* Data processing callback - called by generic I2C module */
+/* 資料處理回調函數 - 由通用 I2C 模組呼叫 */
 static void IR_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
   if (slaveId >= IR_SLAVES_NO) return;
   
   I2C_SlaveDevice_t *slave = &IR.slaves[slaveId];
   if (!slave->enabled || slave->processBuffer == NULL) return;
   
-  /* Parse sensor data: [Vref_LSB, Vref_MSB, eye0_LSB, eye0_MSB, ...] */
+  /* 解析感測器資料：[Vref_LSB, Vref_MSB, eye0_LSB, eye0_MSB, ...] */
   const uint16_t offset = slaveId * EYE_NUM;
   for (uint8_t i = 0; i < EYE_NUM; i++) {
-    const uint8_t idx = 2 + (i * 2);  // Skip Vref (first 2 bytes)
+    const uint8_t idx = 2 + (i * 2);  // 跳過 Vref（前 2 位元組）
     IR.eyeValues[offset + i] = combine_data(slave->processBuffer[idx + 1], slave->processBuffer[idx]);
   }
   
-  /* Mark fresh data and check if all enabled slaves are ready */
+  /* 標記新資料並檢查所有已啟用的從設備是否準備好 */
   __disable_irq();
   freshDataMask |= (1 << slaveId);
   
-  /* Calculate enabled mask inline */
+  /* 內聯計算已啟用掩碼 */
   uint8_t enabledMask = 0;
   for (uint8_t s = 0; s < IR_SLAVES_NO; s++) {
     if (IR.slaves[s].enabled) enabledMask |= (1 << s);
   }
   
-  /* All enabled slaves have fresh data? */
+  /* 所有已啟用的從設備都有新資料了嗎？*/
   if (freshDataMask == enabledMask) {
-    freshDataMask = 0;  // Reset for next cycle
+    freshDataMask = 0;  // 重置以供下個週期使用
     __enable_irq();
     
-    /* Find maximum value across all enabled eyes */
+    /* 找出所有已啟用感測器中的最大值 */
     IR.maxValue = 0;
     IR.maxEye = 0;
     for (uint8_t eye = 0; eye < IR_SLAVES_NO * EYE_NUM; eye++) {
@@ -56,45 +78,49 @@ static void IR_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
         IR.maxEye = eye;
       }
     }
+    
+    /* 自動計算球的角度（使用拋物線插值法以獲得最高精度）*/
+    IR.ballAngle = IR_CalBallAngleInterpolated();
+    
     IR.dataReady = true;
     
-    /* Debug output */
-    dataUart_PrintIRData(IR.maxEye, IR.maxValue, IR.eyeValues);
+    /* 除錯輸出 */
+    dataUart_PrintIRData(&IR);
   }
 }
 
 void IR_Init(I2C_HandleTypeDef *hi2c) {
   if (hi2c == NULL) return;
   
-  /* Initialize IR structure */
+  /* 初始化 IR 結構 */
   memset(&IR, 0, sizeof(IR_t));
   IR.dataReady = false;
   
-  /* Setup slave 1 */
+  /* 設定從設備 1 */
   IR.slaves[IR_SLAVE_1].address = IR_SLAVE_1_ADDR;
-  IR.slaves[IR_SLAVE_1].txBuffer = NULL;  // Direct read, no TX needed
+  IR.slaves[IR_SLAVE_1].txBuffer = NULL;  // 直接讀取，無需 TX
   IR.slaves[IR_SLAVE_1].rxBuffer = rxBuffer1;
   IR.slaves[IR_SLAVE_1].processBuffer = processBuffer1;
   IR.slaves[IR_SLAVE_1].bufferSize = IR_BUFFER_SIZE;
-  IR.slaves[IR_SLAVE_1].txSize = 0;  // 0 = direct read without register write
-  IR.slaves[IR_SLAVE_1].enabled = true;  // Enabled
+  IR.slaves[IR_SLAVE_1].txSize = 0;  // 0 = 直接讀取，不寫入暫存器
+  IR.slaves[IR_SLAVE_1].enabled = true;  // 已啟用
   
-  /* Setup slave 2 - TEMPORARILY DISABLED FOR TESTING */
+  /* 設定從設備 2 - 暫時停用以供測試 */
   IR.slaves[IR_SLAVE_2].address = IR_SLAVE_2_ADDR;
-  IR.slaves[IR_SLAVE_2].txBuffer = NULL;  // Direct read, no TX needed
+  IR.slaves[IR_SLAVE_2].txBuffer = NULL;  // 直接讀取，無需 TX
   IR.slaves[IR_SLAVE_2].rxBuffer = rxBuffer2;
   IR.slaves[IR_SLAVE_2].processBuffer = processBuffer2;
   IR.slaves[IR_SLAVE_2].bufferSize = IR_BUFFER_SIZE;
-  IR.slaves[IR_SLAVE_2].txSize = 0;  // 0 = direct read without register write
-  IR.slaves[IR_SLAVE_2].enabled = true;  // DISABLED - Only use slave 1 for now
+  IR.slaves[IR_SLAVE_2].txSize = 0;  // 0 = 直接讀取，不寫入暫存器
+  IR.slaves[IR_SLAVE_2].enabled = true;  // 已停用 - 目前僅使用從設備 1
   
-  /* Clear buffers */
+  /* 清空緩衝區 */
   if (rxBuffer1) memset(rxBuffer1, 0, IR_BUFFER_SIZE);
   if (rxBuffer2) memset(rxBuffer2, 0, IR_BUFFER_SIZE);
   memset(processBuffer1, 0, IR_BUFFER_SIZE);
   memset(processBuffer2, 0, IR_BUFFER_SIZE);
   
-  /* Initialize generic I2C module with data processing callback */
+  /* 使用資料處理回調函數初始化通用 I2C 模組 */
   I2C_Module_Init(
     &IR.i2cModule,
     hi2c,
@@ -106,16 +132,115 @@ void IR_Init(I2C_HandleTypeDef *hi2c) {
 }
 
 void IR_Process(void) {
-  /* Delegate to common I2C module state machine */
+  /* 委派給通用 I2C 模組狀態機 */
   I2C_Module_Process(&IR.i2cModule);
 }
 
 void IR_RxCallback(I2C_HandleTypeDef *hi2c) {
-  /* Delegate to common I2C module callback */
+  /* 委派給通用 I2C 模組回調 */
   I2C_Module_RxCallback(&IR.i2cModule, hi2c);
 }
 
 void IR_ErrorCallback(I2C_HandleTypeDef *hi2c) {
-  /* Delegate to common I2C module callback */
+  /* 委派給通用 I2C 模組回調 */
   I2C_Module_ErrorCallback(&IR.i2cModule, hi2c);
+}
+
+/**
+ * @brief 使用加權平均法計算球的角度（方法 1）
+ * 
+ * 此方法使用向量加法，以每個感測器的訊號強度作為權重。
+ * 使用從 IR.eyeValues[] 預先計算的資料（由 IR_DataProcessCallback 填充）。
+ * 當球靠近且多個感測器偵測到時更準確。
+ * 
+ * @return 球的角度（度數，0-360°），如果未偵測到球則返回 -1.0f
+ */
+float IR_CalBallAngle(void) {
+  // 檢查是否偵測到球
+  if (IR.maxValue < IR_DETECTION_THRESHOLD) {
+    return -1.0f;  // 未偵測到球
+  }
+  
+  // 加權向量計算
+  float sumX = 0.0f, sumY = 0.0f, sumWeight = 0.0f;
+  
+  // 使用預先計算的 eyeValues 處理所有 14 個感測器
+  for (uint8_t eye = 0; eye < IR_SLAVES_NO * EYE_NUM; eye++) {
+    uint16_t value = IR.eyeValues[eye];
+    
+    // 僅使用超過閾值的感測器
+    if (value > IR_DETECTION_THRESHOLD) {
+      float weight = (float)value;
+      float rad = EYE_ANGLES[eye] * (M_PI / 180.0f);
+      
+      sumX += weight * cosf(rad);
+      sumY += weight * sinf(rad);
+      sumWeight += weight;
+    }
+  }
+  
+  // 未找到有效感測器
+  if (sumWeight == 0.0f) { return -1.0f; }
+  
+  // 使用 atan2 計算加權方向
+  float angle = atan2f(sumY, sumX) * (180.0f / M_PI);
+  
+  angle -= 90.0f;          // 調整為 0° 在前方
+  angle = 360.0f - angle;  // 改為順時針方向
+  if (angle < 0) { angle += 360.0f; }
+  if (angle >= 360.0f) { angle -= 360.0f; }
+  
+  return angle;
+}
+
+/**
+ * @brief 使用三點拋物線插值法計算球的角度（方法 3）
+ * 
+ * 此方法使用最強感測器及其兩個相鄰感測器，
+ * 透過拋物線插值找到精確的峰值位置。
+ * 使用從 IR.eyeValues[] 預先計算的資料（由 IR_DataProcessCallback 填充）。
+ * 當球在相鄰感測器之間時精度最高。
+ * 
+ * @return 球的角度（度數，0-360°），如果未偵測到球則返回 -1.0f
+ */
+float IR_CalBallAngleInterpolated(void) {
+  // 檢查是否偵測到球
+  if (IR.maxValue < IR_DETECTION_THRESHOLD) {
+    return -1.0f;  // 未偵測到球
+  }
+  
+  uint8_t maxIdx = IR.maxEye;
+  
+  // 取得相鄰感測器索引（循環包裹）
+  uint8_t prevIdx = (maxIdx == 0) ? 13 : maxIdx - 1;
+  uint8_t nextIdx = (maxIdx == 13) ? 0 : maxIdx + 1;
+  
+  // 從預先計算的 eyeValues 陣列取得感測器值
+  uint16_t prevVal = IR.eyeValues[prevIdx];
+  uint16_t maxVal = IR.eyeValues[maxIdx];
+  uint16_t nextVal = IR.eyeValues[nextIdx];
+  
+  // 拋物線插值以找出峰值偏移
+  // 公式：offset = (prevVal - nextVal) / (2 * (prevVal - 2*maxVal + nextVal))
+  float offset = 0.0f;
+  float denominator = 2.0f * (prevVal - 2 * maxVal + nextVal);
+  
+  if (fabsf(denominator) > 1.0f) {  // 避免除以零
+    offset = (prevVal - nextVal) / denominator;
+    
+    // 將偏移限制在 [-1, 1] 以確保安全
+    if (offset > 1.0f) offset = 1.0f;
+    if (offset < -1.0f) offset = -1.0f;
+  }
+  
+  // 計算插值角度
+  // 25.7° = 360° / 14 個感測器（相鄰感測器之間的角度）
+  float angle = EYE_ANGLES[maxIdx] + offset * 25.7f;
+  
+  angle -= 90.0f;          // 調整為 0° 在前方
+  angle = 360.0f - angle;  // 改為順時針方向
+  if (angle < 0.0f) {  angle += 360.0f; }
+  if (angle >= 360.0f) { angle -= 360.0f; }
+  
+  return angle;
 }

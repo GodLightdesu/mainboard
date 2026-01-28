@@ -68,8 +68,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
     # Uncomment the lines below to enable debug UART printing for each module
+    DEBUG_GENERAL       # General debug messages
     # DEBUG_MPU6050        # MPU6050 sensor data and initialization
-    DEBUG_MPU6050_DMP    # MPU6050 attitude (Roll/Pitch/Yaw)
+    # DEBUG_MPU6050_DMP    # MPU6050 attitude (Roll/Pitch/Yaw)
     DEBUG_IR             # IR sensor eye data
     # DEBUG_I2C            # I2C communication errors and status
     # DEBUG_MOTORS         # Motor testing PWM values

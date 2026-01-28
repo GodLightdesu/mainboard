@@ -21,15 +21,15 @@ PWM Channel Mapping:
     3    TIM4_CH4    TIM4_CH3
 */
 
-#include "tim.h"
-#include "stdint.h"
-#include "math.h"
-
 #define MOTOR_COUNT 4
 #define MAX_SPEED 100
 #define PWM_MAX_VALUE (uint16_t)(1000 - 1)   /**< 10kHz PWM @ 10MHz timer clock */
 #define PWM_STARTUP_MIN 400                  /**< Min PWM for motor startup (~40% duty, ~4.8V @ 12V supply) */
 
+
+#include "tim.h"
+#include "math.h"
+#include "stdint.h"
 typedef enum {
   FAST_DECAY = 0,
   SLOW_DECAY
@@ -73,8 +73,8 @@ uint32_t spd_Map(uint8_t speed);
 
 /* Motor advanced control functions */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3);
-void ALL_stop();
 void polarMove(float angle_deg, uint8_t speed);
+void mtrs_StopAll(void);
 
 /* Test and calibration functions */
 void mtr_FindMinimumStartupPWM(MtrID_t mtr_id);

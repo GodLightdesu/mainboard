@@ -1,4 +1,5 @@
 #include "mpu6050.h"
+#include "data_uart.h"
 
 MPU6050_t MPU6050 = {0};
 
@@ -42,9 +43,7 @@ static void MPU6050_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
   MPU6050.dataReady = true;
   
   /* Print data immediately after processing */
-  dataUart_PrintMPU6050Data(MPU6050.ax, MPU6050.ay, MPU6050.az,
-                            MPU6050.gx, MPU6050.gy, MPU6050.gz,
-                            MPU6050.temperature);
+  dataUart_PrintMPU6050Data(&MPU6050);
 }
 
 void MPU6050_init(I2C_HandleTypeDef *hi2c) {

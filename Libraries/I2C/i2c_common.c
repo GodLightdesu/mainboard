@@ -1,4 +1,5 @@
 #include "i2c_common.h"
+#include "data_uart.h"
 
 /* Global bus managers (support up to 4 I2C peripherals) */
 #define MAX_I2C_BUSES 4

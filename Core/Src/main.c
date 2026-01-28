@@ -174,13 +174,21 @@ int main(void)
       // float roll = euler.roll;
       // float pitch = euler.pitch;
 
-      int8_t spd = 50;
+      // for (MtrID_t mtr_id = MTR0; mtr_id < 4; ++mtr_id) {
+      //   mtr_SetDecayMode(mtr_id, SLOW_DECAY);
+      // }
+      int8_t spd = 40;
       if (yaw > 10) {
         mtrs_Set4Speed(-spd, -spd, -spd, -spd);
       } else if (yaw < -10) {
         mtrs_Set4Speed(spd, spd, spd, spd);
       } else {
-        mtrs_Set4Speed(0, 0, 0, 0);
+        // chase ball
+        if (IR.dataReady && IR.ballAngle >= 0) {
+          polarMove(IR.ballAngle, spd + 10);
+        } else {
+          mtrs_StopAll();
+        }
       }
     }
     
