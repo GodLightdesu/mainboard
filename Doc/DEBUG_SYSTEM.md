@@ -26,7 +26,7 @@ data_uart.c/h
 各模塊 (mpu6050.c, ir.c, i2c_common.c, etc.)
     ↓ 調用 dataUart_PrintXXX()
     ↓
-UART4 輸出 (115200 baud)
+UART4 輸出 (9600 baud)
 ```
 
 ## DEBUG 宏配置
@@ -57,6 +57,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 | `DEBUG_IR` | IR 感測器 | • 眼睛數據 (Eye/Val)<br>• 所有感測器數值 |
 | `DEBUG_I2C` | I2C 通信 | • I2C 錯誤碼和從機 ID<br>• 超時警告<br>• RX 回調計數<br>• 設備發現消息<br>• 原始十六進制數據 |
 | `DEBUG_MOTORS` | 馬達控制 | • 馬達測試標題<br>• PWM 值和占空比<br>• 測試字符串 |
+| `DEBUG_SOCCER` | 足球狀態機 | • 狀態轉換 (IDLE/SEARCH/CHASE/ALIGN/OUT_OF_BOUNDS)<br>• 足球角度和距離<br>• 當前偏航角 |
 
 ## data_uart 模塊
 
@@ -81,6 +82,9 @@ void dataUart_PrintDeviceFound(uint16_t addr);
 
 // 馬達調試打印
 void dataUart_PrintMotorTest(int motorId);
+
+// 足球調試打印
+void dataUart_PrintSoccerState(const char *stateName, float ballAngle, float ballDistance, float yawAngle);
 
 // 通用調試打印
 void dataUart_PrintInitMessage(const char *moduleName);

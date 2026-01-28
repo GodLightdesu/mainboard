@@ -1,7 +1,7 @@
 #include "mpu6050_dmp.h"
 #include "data_uart.h"
 
-MPU6050_DMP_t MPU6050_DMP = {0};
+static MPU6050_DMP_t MPU6050_DMP = {0};
 /**
  * @brief Simple complementary filter for orientation estimation
  */
@@ -9,14 +9,16 @@ static void ComplementaryFilter(void) {
   static bool initialized = false;
   static uint32_t lastTime = 0;
   
-  if (!MPU6050.dataReady) return;
+  if (!MPU6050_IsDataReady()) return;
+  
+  const MPU6050_t* mpu = MPU6050_GetData();
   
   uint32_t now = HAL_GetTick();
   
   if (!initialized) {
     // Initialize from accelerometer
-    float roll = atan2f(MPU6050.ay, MPU6050.az) * 180.0f / M_PI;
-    float pitch = atan2f(-MPU6050.ax, sqrtf(MPU6050.ay*MPU6050.ay + MPU6050.az*MPU6050.az)) * 180.0f / M_PI;
+    float roll = atan2f(mpu->ay, mpu->az) * 180.0f / M_PI;
+    float pitch = atan2f(-mpu->ax, sqrtf(mpu->ay*mpu->ay + mpu->az*mpu->az)) * 180.0f / M_PI;
     
     MPU6050_DMP.euler.roll = roll;
     MPU6050_DMP.euler.pitch = pitch;
@@ -35,12 +37,12 @@ static void ComplementaryFilter(void) {
   float dt = (now - lastTime) / 1000.0f;
   lastTime = now;
   
-  if (dt > 0.5f) dt = 0.01f;  // Prevent large jumps
+  if (dt > MAX_DT) dt = DEFAULT_DT;  // Prevent large jumps
   
   // Apply gyro bias calibration
-  float gx_calibrated = MPU6050.gx - MPU6050_DMP.gyroBias[0];
-  float gy_calibrated = MPU6050.gy - MPU6050_DMP.gyroBias[1];
-  float gz_calibrated = MPU6050.gz - MPU6050_DMP.gyroBias[2];
+  float gx_calibrated = mpu->gx - MPU6050_DMP.gyroBias[0];
+  float gy_calibrated = mpu->gy - MPU6050_DMP.gyroBias[1];
+  float gz_calibrated = mpu->gz - MPU6050_DMP.gyroBias[2];
   
   // Gyroscope integration with calibrated data
   float gyroRoll = MPU6050_DMP.euler.roll + gx_calibrated * dt;
@@ -48,11 +50,11 @@ static void ComplementaryFilter(void) {
   float gyroYaw = MPU6050_DMP.euler.yaw + gz_calibrated * dt;
   
   // Accelerometer angles
-  float accelRoll = atan2f(MPU6050.ay, MPU6050.az) * 180.0f / M_PI;
-  float accelPitch = atan2f(-MPU6050.ax, sqrtf(MPU6050.ay*MPU6050.ay + MPU6050.az*MPU6050.az)) * 180.0f / M_PI;
+  float accelRoll = atan2f(mpu->ay, mpu->az) * 180.0f / M_PI;
+  float accelPitch = atan2f(-mpu->ax, sqrtf(mpu->ay*mpu->ay + mpu->az*mpu->az)) * 180.0f / M_PI;
   
   // Complementary filter (98% gyro, 2% accel)
-  const float alpha = 0.98f;
+  const float alpha = COMPLEMENTARY_FILTER_ALPHA;
   MPU6050_DMP.euler.roll = alpha * gyroRoll + (1.0f - alpha) * accelRoll;
   MPU6050_DMP.euler.pitch = alpha * gyroPitch + (1.0f - alpha) * accelPitch;
   MPU6050_DMP.euler.yaw = gyroYaw;  // No accelerometer correction for yaw
@@ -78,8 +80,8 @@ static void ComplementaryFilter(void) {
   
   /* Print attitude at controlled interval */
   static uint32_t lastPrintTime = 0;
-  if (now - lastPrintTime >= 100) {  // Print every 100ms
-    dataUart_PrintMPU6050Attitude(&MPU6050_DMP);
+  if (now - lastPrintTime >= ATTITUDE_PRINT_INTERVAL_MS) {  // Print every 100ms
+    dataUart_PrintMPU6050Attitude(MPU6050_DMP_GetData());
     lastPrintTime = now;
   }
 }
@@ -116,17 +118,18 @@ void MPU6050_DMP_CalibrateGyro(uint16_t samples) {
     }
     
     // Wait for new data
-    while (!MPU6050.dataReady) {
+    while (!MPU6050_IsDataReady()) {
       MPU6050_Process();
       HAL_Delay(1);
     }
     
-    sum_gx += MPU6050.gx;
-    sum_gy += MPU6050.gy;
-    sum_gz += MPU6050.gz;
+    const MPU6050_t* mpu_cal = MPU6050_GetData();
+    sum_gx += mpu_cal->gx;
+    sum_gy += mpu_cal->gy;
+    sum_gz += mpu_cal->gz;
     valid_samples++;
     
-    MPU6050.dataReady = false;
+    MPU6050_SetDataReady(false);
     HAL_Delay(10);
   }
   
@@ -176,7 +179,7 @@ void MPU6050_DMP_ResetYaw(void) {
 }
 
 bool MPU6050_DMP_Update(void) {
-  if (!MPU6050.dataReady) return false;
+  if (!MPU6050_IsDataReady()) return false;
   
   // Use complementary filter for orientation estimation
   ComplementaryFilter();
@@ -217,4 +220,12 @@ void MPU6050_QuaternionToEuler(const Quaternion_t *quat, EulerAngles_t *euler) {
   float siny_cosp = 2.0f * (quat->w * quat->z + quat->x * quat->y);
   float cosy_cosp = 1.0f - 2.0f * (quat->y * quat->y + quat->z * quat->z);
   euler->yaw = atan2f(siny_cosp, cosy_cosp) * 180.0f / M_PI;
+}
+
+const MPU6050_DMP_t* MPU6050_DMP_GetData(void) {
+  return &MPU6050_DMP;
+}
+
+bool MPU6050_DMP_IsDataReady(void) {
+  return MPU6050_DMP.ready;
 }

@@ -7,6 +7,12 @@
 #define DMP_FEATURE_SEND_RAW_ACCEL      0x0004  // Send raw accelerometer data
 #define DMP_FEATURE_SEND_RAW_GYRO       0x0008  // Send raw gyroscope data
 
+/* Complementary filter constants */
+#define COMPLEMENTARY_FILTER_ALPHA      0.98f   /**< Gyro weight in complementary filter */
+#define MAX_DT                          0.5f    /**< Maximum allowed dt to prevent large jumps */
+#define DEFAULT_DT                      0.01f   /**< Default dt when max exceeded */
+#define ATTITUDE_PRINT_INTERVAL_MS      100     /**< Print attitude every 100ms */
+
 #include <math.h>
 #include <string.h>
 #include <stdint.h>
@@ -43,7 +49,24 @@ typedef struct MPU6050_DMP_t {
   int16_t gyro[3];   // Raw gyroscope data
 } MPU6050_DMP_t;
 
-extern MPU6050_DMP_t MPU6050_DMP;
+/**
+ * @brief Get pointer to MPU6050 DMP data structure (read-only)
+ * @return Const pointer to DMP data
+ */
+const MPU6050_DMP_t* MPU6050_DMP_GetData(void);
+
+/**
+ * @brief Check if DMP data is ready
+ * @return true if new data is available
+ */
+bool MPU6050_DMP_IsDataReady(void);
+
+/**
+ * @brief Get Euler angles from DMP
+ * @param euler Pointer to EulerAngles_t to fill
+ * @return true if successful
+ */
+bool MPU6050_DMP_GetEulerAngles(EulerAngles_t *euler);
 
 /**
  * @brief Initialize DMP
@@ -92,5 +115,11 @@ void MPU6050_DMP_ResetYaw(void);
  * @param euler Output Euler angles
  */
 void MPU6050_QuaternionToEuler(const Quaternion_t *quat, EulerAngles_t *euler);
+
+/**
+ * @brief Get pointer to DMP data structure
+ * @return Pointer to const MPU6050_DMP_t structure
+ */
+const MPU6050_DMP_t* MPU6050_DMP_GetData(void);
 
 #endif // MPU6050_DMP_H

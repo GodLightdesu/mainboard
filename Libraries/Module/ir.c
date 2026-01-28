@@ -1,9 +1,7 @@
 #include "ir.h"
 #include "data_uart.h"
 
-
-/* 全域 IR 實例 */
-IR_t IR = {0};
+static IR_t IR = {0};
 
 /* 追蹤當前輪詢週期中哪些從設備有新資料 */
 static uint8_t freshDataMask = 0;
@@ -85,7 +83,7 @@ static void IR_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
     IR.dataReady = true;
     
     /* 除錯輸出 */
-    dataUart_PrintIRData(&IR);
+    dataUart_PrintIRData(IR_GetData());
   }
 }
 
@@ -243,4 +241,21 @@ float IR_CalBallAngleInterpolated(void) {
   if (angle >= 360.0f) { angle -= 360.0f; }
   
   return angle;
+}
+
+const IR_t* IR_GetData(void) { return &IR; }
+
+bool IR_IsDataReady(void) { return IR.dataReady; }
+
+bool IR_SetSlaveEnabled(uint8_t slaveId, bool enable) {
+  return I2C_Module_SetSlaveEnabled(&IR.i2cModule, slaveId, enable);
+}
+
+bool IR_IsSlaveEnabled(uint8_t slaveId) {
+  return I2C_Module_IsSlaveEnabled(&IR.i2cModule, slaveId);
+}
+
+uint16_t IR_GetSlaveAddress(uint8_t slaveId) {
+  if (slaveId >= IR_SLAVES_NO) return 0;
+  return IR.slaves[slaveId].address;
 }

@@ -1,5 +1,49 @@
 # 更新日誌
 
+## [2.4.0] - 2026-01-28
+
+### 🔧 模組封裝重構
+
+#### 靜態變數封裝
+- **所有模組變數私有化**：將全局變數改為靜態變數
+  - `mpu6050.c`: `mpu6050_data` → 靜態
+  - `ir.c`: `ir_data` → 靜態
+  - `motors.c`: `motors_data` → 靜態
+- **Getter 函數**：提供 const 指針訪問器
+  - `MPU6050_GetData()`: 返回 `const MPU6050_Data_t*`
+  - `IR_GetData()`: 返回 `const IR_Data_t*`
+  - `Motors_GetData()`: 返回 `const Motors_Data_t*`
+
+#### 記憶體優化
+- **消除循環依賴**：移除標頭檔間的交叉引用
+- **減少堆疊使用**：靜態變數避免重複分配
+- **編譯時初始化**：靜態變數在編譯時初始化
+
+### ⚡ 效能優化
+
+#### 指針快取機制
+- **模組數據結構**：`ModuleData_t` 整合所有模組指針
+  ```c
+  typedef struct {
+      const IR_t* irData;
+      const MPU6050_t* mpuData;
+      const MPU6050_DMP_t* dmpData;
+  } ModuleData_t;
+  ```
+- **主循環快取**：在 `main.c` 中宣告靜態 `ModuleData_t moduleData`
+- **減少函數調用**：避免每次循環重複調用 getter 函數
+
+#### 記憶體使用優化
+- **FLASH 使用率**：67.23% (之前約 75%)
+- **RAM 使用率**：保持穩定
+- **編譯時間**：無顯著變化
+
+### 📝 文檔更新
+- **README.md**: 更新版本至 2.4.0，新增狀態機和效能優化說明
+- **CHANGELOG.md**: 本文件，記錄所有變更
+
+---
+
 ## [2.3.0] - 2026-01-28
 
 ### 🔧 I2C 總線管理器重構

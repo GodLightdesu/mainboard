@@ -49,9 +49,6 @@ typedef struct IR_t {
   I2C_SlaveDevice_t slaves[IR_SLAVES_NO];  /**< Slave devices */
 } IR_t;
 
-/* Global IR instance */
-extern IR_t IR;
-
 /**
  * @brief Initialize IR sensor module with I2C peripheral
  * @param hi2c Pointer to I2C peripheral handle
@@ -93,5 +90,39 @@ float IR_CalBallAngle(void);
  * @note This method is automatically called in IR_DataProcessCallback to update IR.ballAngle
  */
 float IR_CalBallAngleInterpolated(void);
+
+/**
+ * @brief Get pointer to IR data structure (read-only)
+ * @return Const pointer to IR data
+ */
+const IR_t* IR_GetData(void);
+
+/**
+ * @brief Check if IR data is ready
+ * @return true if new data is available
+ */
+bool IR_IsDataReady(void);
+
+/**
+ * @brief Enable or disable a specific IR slave device
+ * @param slaveId The slave ID (IR_SLAVE_1 or IR_SLAVE_2)
+ * @param enable true to enable, false to disable
+ * @return true if successful, false if invalid parameters
+ */
+bool IR_SetSlaveEnabled(uint8_t slaveId, bool enable);
+
+/**
+ * @brief Check if a specific IR slave device is enabled
+ * @param slaveId The slave ID (IR_SLAVE_1 or IR_SLAVE_2)
+ * @return true if enabled, false otherwise
+ */
+bool IR_IsSlaveEnabled(uint8_t slaveId);
+
+/**
+ * @brief Get address of a specific IR slave device
+ * @param slaveId The slave ID (IR_SLAVE_1 or IR_SLAVE_2)
+ * @return Slave address, or 0 if invalid
+ */
+uint16_t IR_GetSlaveAddress(uint8_t slaveId);
 
 #endif /* IR_H */

@@ -1,7 +1,7 @@
 #include "mpu6050.h"
 #include "data_uart.h"
 
-MPU6050_t MPU6050 = {0};
+static MPU6050_t MPU6050 = {0};
 
 static uint8_t *rxBuffer1 = MPU6050_RXBUF_PTR;
 static uint8_t processBuffer1[MPU6050_BUFFER_SIZE];
@@ -43,7 +43,7 @@ static void MPU6050_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
   MPU6050.dataReady = true;
   
   /* Print data immediately after processing */
-  dataUart_PrintMPU6050Data(&MPU6050);
+  dataUart_PrintMPU6050Data(MPU6050_GetData());
 }
 
 void MPU6050_init(I2C_HandleTypeDef *hi2c) {
@@ -121,4 +121,16 @@ void MPU6050_RxCallback(I2C_HandleTypeDef *hi2c) {
 void MPU6050_ErrorCallback(I2C_HandleTypeDef *hi2c) {
   /* Delegate to common I2C module callback */
   I2C_Module_ErrorCallback(&MPU6050.i2cModule, hi2c);
+}
+
+const MPU6050_t* MPU6050_GetData(void) {
+  return &MPU6050;
+}
+
+bool MPU6050_IsDataReady(void) {
+  return MPU6050.dataReady;
+}
+
+void MPU6050_SetDataReady(bool ready) {
+  MPU6050.dataReady = ready;
 }

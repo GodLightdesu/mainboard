@@ -2,9 +2,25 @@
 
 這是一個基於 STM32H750 微控制器的主控板韌體專案，用於控制多馬達機器人系統並整合 IR 感測器陣列。
 
-## 🎉 最新更新 (v2.3.0 - 2026-01-28)
+## 🎉 最新更新 (v2.4.0 - 2026-01-29)
 
-### I2C 總線管理器重構
+### 🤖 足球機器人基礎控制邏輯
+- **基礎控制實現**：基於 IR 和 MPU6050 數據的簡單決策邏輯
+  - 偏航角校正：當 yaw > 10° 時後退，yaw < -10° 時前進
+  - 足球追逐：當 yaw 在範圍內且檢測到足球時，使用極座標移動追逐
+  - 停止邏輯：無足球數據時停止所有馬達
+- **響應式決策**：基於即時 IR 和 MPU6050 數據的控制
+- **模組化設計**：清晰的數據處理和控制分離
+
+### 模組封裝重構 (v2.4.0)
+- **靜態變數私有化**：所有模組變數改為靜態，通過 getter 函數訪問
+  - `MPU6050_GetData()`: 返回 `const MPU6050_Data_t*`
+  - `IR_GetData()`: 返回 `const IR_Data_t*`
+  - `Motors_GetData()`: 返回 `const Motors_Data_t*`
+- **指針快取機制**：`ModuleData_t` 結構整合所有模組指針，減少 getter 調用
+- **記憶體優化**：FLASH 使用率 67.23%，消除循環依賴
+
+### I2C 總線管理器重構 (v2.3.0)
 - **全局總線鎖機制**：實現真正的多模組輪流使用共享 I2C 總線
 - **原子化總線獲取**：`I2C_Bus_TryAcquire()` 確保只有一個模組可佔用總線
 - **自動總線釋放**：傳輸完成、錯誤、超時時自動釋放總線
@@ -43,7 +59,7 @@
 - **核心**: ARM Cortex-M7
 - **系統時鐘**: 240 MHz (透過 HSI + PLL)
 - **記憶體**: 
-  - Flash: 128 KB
+  - Flash: 128 KB (使用 67.23%)
   - SRAM: 1 MB (含 DMA 緩衝區於 D2 域)
 - **調試介面**: SWD (Serial Wire Debug)
 
@@ -610,10 +626,17 @@ Eye:3 Val:1024
 
 #### 禁用從機
 
-可以在 `IR_Init()` 中設置 `enabled = false` 來禁用特定從機：
+有兩種方式禁用特定從機：
 
+**初始化時禁用**（靜態）:
 ```c
 IR.slaves[IR_SLAVE_2].enabled = false;  // 禁用第二個從機
+```
+
+**運行時禁用**（動態）:
+```c
+IR_SetSlaveEnabled(IR_SLAVE_2, false);  // 運行時禁用第二個從機
+IR_SetSlaveEnabled(IR_SLAVE_2, true);   // 運行時重新啟用
 ```
 
 狀態機會自動跳過禁用的從機，只輪詢已啟用的從機。
@@ -684,25 +707,43 @@ int main(void) {
     // ... 其他 TIM
     
     // 3. 應用層初始化
-    dataUart_Init(&huart4);
-    IR_Init(&hi2c3);       // IR 感測器模組
-    MPU6050_Init(&hi2c3);  // MPU6050 IMU 模組
-    Mtrs_Init();           // 馬達控制
+    dataUart_Init(&huart4);    /* UART for data output */
+    
+    /* Initialize I2C bus manager for shared I2C3 peripheral */
+    I2C_BusManager_t i2c3_bus;
+    I2C_Bus_Init(&i2c3_bus, &hi2c3);
+    
+    IR_Init(&hi2c3);           /* IR sensor module */
+    MPU6050_Init(&hi2c3);      /* MPU6050 IMU module */
+    MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
+    Mtrs_Init();               /* Motor control */
+    
+    /* Cache module data pointers for efficiency */
+    static const IR_t* irDataPtr = IR_GetData();
+    static const MPU6050_t* mpuDataPtr = MPU6050_GetData();
+    static const MPU6050_DMP_t* dmpDataPtr = MPU6050_DMP_GetData();
+    
+    static ModuleData_t moduleData = {
+        .irData = irDataPtr,
+        .mpuData = mpuDataPtr,
+        .dmpData = dmpDataPtr
+    };
     
     // 4. 主迴圈
     while(1) {
         // 狀態 LED 心跳
-        HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
-        
-        // 更新所有感測器數據
-        updateData(HAL_GetTick());
-        
-        // 根據感測器數據控制馬達 (範例)
-        if(IR.maxValue > IR_DETECTION_THRESHOLD) {
-            polarMove(GetAngleFromSensor(IR.maxEye), 60);
+        if (HAL_GetTick() - lastLedToggleTime >= LED_HEARTBEAT_MS) {
+            HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
+            lastLedToggleTime = HAL_GetTick();
         }
         
-        HAL_Delay(10);
+        // 更新所有感測器數據
+        updateData();
+        
+        // 處理足球機器人控制邏輯
+        soccer_ProcessData(&moduleData);
+        
+        HAL_Delay(MAIN_LOOP_DELAY_MS);
     }
 }
 ```
@@ -737,6 +778,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 | `DEBUG_IR` | IR 感測器 | 眼睛數據 (Eye/Val)<br>IR 數據解析 | `dataUart_PrintIRData()`<br>`ParseAndDisplayIRData()` |
 | `DEBUG_I2C` | I2C 通訊 | I2C 錯誤信息<br>I2C 超時<br>RX 回調計數<br>設備發現 | `dataUart_PrintI2CError()`<br>`dataUart_PrintI2CStatus()`<br>`dataUart_PrintDeviceFound()`<br>`DisplayRawHexData()` |
 | `DEBUG_MOTORS` | 馬達 | 測試標題<br>PWM 值 | `dataUart_PrintMotorTest()`<br>`dataUart_SendFormattedPWM()` |
+| `DEBUG_SOCCER` | 足球控制 | 狀態信息 (未實現狀態機)<br>足球角度和偏航角 | `dataUart_PrintSoccerState()` |
 
 #### 輸出範例
 
@@ -1007,7 +1049,7 @@ Copyright (c) 2025 STMicroelectronics.
 
 ---
 
-**版本**: 1.0.0  
-**最後更新**: 2025年1月  
+**版本**: 2.4.0  
+**最後更新**: 2026年1月29日  
 **平台**: STM32H750XX  
 **開發工具**: STM32CubeIDE / VS Code + CMake

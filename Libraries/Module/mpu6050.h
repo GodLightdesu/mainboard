@@ -67,7 +67,23 @@ typedef struct MPU6050_t
   I2C_SlaveDevice_t slaves[MPU6050_SLAVES_NO];  /**< Slave devices */
 } MPU6050_t;
 
-extern MPU6050_t MPU6050;
+/**
+ * @brief Get pointer to MPU6050 data structure (read-only)
+ * @return Const pointer to MPU6050 data
+ */
+const MPU6050_t* MPU6050_GetData(void);
+
+/**
+ * @brief Check if MPU6050 data is ready
+ * @return true if new data is available
+ */
+bool MPU6050_IsDataReady(void);
+
+/**
+ * @brief Set MPU6050 data ready flag
+ * @param ready true to set ready
+ */
+void MPU6050_SetDataReady(bool ready);
 
 void MPU6050_init(I2C_HandleTypeDef *hi2c);
 

@@ -129,7 +129,7 @@ int main(void)
   /* Initialize application modules */
   dataUart_Init(&huart4);    /* UART for data output */
 
-  HAL_Delay(10);  // wait 10ms
+  HAL_Delay(I2C_INIT_DELAY_MS);  // wait 10ms
 
   /* Initialize I2C bus manager for shared I2C3 peripheral */
   I2C_BusManager_t i2c3_bus;
@@ -138,10 +138,10 @@ int main(void)
   /* Initialize IR sensor module with I2C peripheral */
   IR_Init(&hi2c3);
   // Disable IR module for testing
-  // I2C_Module_SetSlaveEnabled(&IR.i2cModule, IR_SLAVE_1, false);
-  // I2C_Module_SetSlaveEnabled(&IR.i2cModule, IR_SLAVE_2, false);
-  // I2C_Find(&huart4, &hi2c3, IR.slaves[0].address);
-  // I2C_Find(&huart4, &hi2c3, IR.slaves[1].address);
+  // IR_SetSlaveEnabled(IR_SLAVE_1, false);
+  // IR_SetSlaveEnabled(IR_SLAVE_2, false);
+  // I2C_Find(&huart4, &hi2c3, IR_GetSlaveAddress(IR_SLAVE_1));
+  // I2C_Find(&huart4, &hi2c3, IR_GetSlaveAddress(IR_SLAVE_2));
 
   uint16_t addr = 0x68;     // mpu6050
   I2C_Find(&huart4, &hi2c3, addr);
@@ -149,6 +149,21 @@ int main(void)
   MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
   
   Mtrs_Init();
+
+  /* Cache module data pointers for efficiency */
+  static const IR_t* irDataPtr;
+  static const MPU6050_t* mpuDataPtr;
+  static const MPU6050_DMP_t* dmpDataPtr;
+  
+  irDataPtr = IR_GetData();
+  mpuDataPtr = MPU6050_GetData();
+  dmpDataPtr = MPU6050_DMP_GetData();
+
+  /* Create module data struct once */
+  static ModuleData_t moduleData;
+  moduleData.irData = irDataPtr;
+  moduleData.mpuData = mpuDataPtr;
+  moduleData.dmpData = dmpDataPtr;
 
   /* Initialize timing variables */
   uint32_t lastLedToggleTime = HAL_GetTick();
@@ -167,34 +182,12 @@ int main(void)
     /* Update all sensor data */
     updateData();
     
-    /* Get MPU6050 attitude using API */
-    EulerAngles_t euler;
-    if (MPU6050_DMP_GetEulerAngles(&euler)) {
-      float yaw = euler.yaw;
-      // float roll = euler.roll;
-      // float pitch = euler.pitch;
-
-      // for (MtrID_t mtr_id = MTR0; mtr_id < 4; ++mtr_id) {
-      //   mtr_SetDecayMode(mtr_id, SLOW_DECAY);
-      // }
-      int8_t spd = 40;
-      if (yaw > 10) {
-        mtrs_Set4Speed(-spd, -spd, -spd, -spd);
-      } else if (yaw < -10) {
-        mtrs_Set4Speed(spd, spd, spd, spd);
-      } else {
-        // chase ball
-        if (IR.dataReady && IR.ballAngle >= 0) {
-          polarMove(IR.ballAngle, spd + 10);
-        } else {
-          mtrs_StopAll();
-        }
-      }
-    }
+    /* Process data in soccer module */
+    soccer_ProcessData(&moduleData);
     
     /* TODO: Implement state machine logic */
     // State_t SoccerState = getState();
-    // polarMove(0, 60);
+    // Use state for advanced behaviors like defense, out of bounds detection, etc.
 
     HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */

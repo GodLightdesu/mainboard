@@ -28,7 +28,7 @@ void dataUart_PrintInitMessage(const char *moduleName) {
 }
 
 // MPU6050 debug functions
-void dataUart_PrintMPU6050Data(MPU6050_t *mpuData) {
+void dataUart_PrintMPU6050Data(const MPU6050_t *mpuData) {
 #ifdef DEBUG_MPU6050
   if (dataUart_huart == NULL || mpuData == NULL) return;
   
@@ -44,7 +44,7 @@ void dataUart_PrintMPU6050Data(MPU6050_t *mpuData) {
 #endif
 }
 
-void dataUart_PrintMPU6050Attitude(MPU6050_DMP_t *dmpData) {
+void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData) {
 #ifdef DEBUG_MPU6050_DMP
   if (dataUart_huart == NULL || dmpData == NULL) return;
   
@@ -96,7 +96,7 @@ HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size) {
 #endif
 }
 
-void dataUart_PrintIRData(IR_t *IR_Module) {
+void dataUart_PrintIRData(const IR_t *IR_Module) {
 #ifdef DEBUG_IR
   if (dataUart_huart == NULL || IR_Module == NULL) return;
   
@@ -219,6 +219,20 @@ void dataUart_PrintDeviceFound(uint16_t addr) {
   
   char msg[32];
   int len = snprintf(msg, sizeof(msg), "Device found at 0x%02X\r\n", addr);
+  if (len > 0 && len < (int)sizeof(msg)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)msg, len, 100);
+  }
+#endif
+}
+
+// Soccer debug functions
+void dataUart_PrintSoccerState(const char *stateName, float ballAngle, float ballDistance, float yawAngle) {
+#ifdef DEBUG_SOCCER
+  if (dataUart_huart == NULL || stateName == NULL) return;
+  
+  char msg[80];
+  int len = snprintf(msg, sizeof(msg), "Soccer State: %s | Ball: %.1f° %.1f | Yaw: %.1f°\r\n", 
+                     stateName, ballAngle, ballDistance, yawAngle);
   if (len > 0 && len < (int)sizeof(msg)) {
     HAL_UART_Transmit(dataUart_huart, (uint8_t*)msg, len, 100);
   }
