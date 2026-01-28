@@ -22,10 +22,8 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "i2c_master.h"
-
-/* External I2C Master instance */
-extern I2C_Master_t i2cMaster;
+#include "ir.h"
+#include "mpu6050.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -210,7 +208,9 @@ void SysTick_Handler(void)
 void DMA1_Stream0_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
-
+  /* DMA interrupt counter - can be monitored in debugger if needed */
+  static volatile uint32_t dmaCount = 0;
+  dmaCount++;
   /* USER CODE END DMA1_Stream0_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_i2c3_rx);
   /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
@@ -266,14 +266,27 @@ void I2C3_ER_IRQHandler(void)
   * @brief I2C Master RX Complete Callback
   */
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-  I2C_Master_RxCallback(&i2cMaster, hi2c);
+  /* Dispatch to appropriate module based on I2C peripheral */
+  IR_RxCallback(hi2c);
+  MPU6050_RxCallback(hi2c);
+}
+
+/**
+  * @brief I2C Memory RX Complete Callback (for HAL_I2C_Mem_Read_DMA)
+  */
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+  /* Dispatch to appropriate module based on I2C peripheral */
+  IR_RxCallback(hi2c);
+  MPU6050_RxCallback(hi2c);
 }
 
 /**
   * @brief I2C Error Callback
   */
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
-  I2C_Master_ErrorCallback(&i2cMaster, hi2c);
+  /* Dispatch to appropriate module based on I2C peripheral */
+  IR_ErrorCallback(hi2c);
+  MPU6050_ErrorCallback(hi2c);
 }
 
 /* USER CODE END 1 */

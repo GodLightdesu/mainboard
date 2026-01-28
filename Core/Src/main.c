@@ -29,11 +29,13 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "string.h"
-#include "data_uart.h"
-#include "i2c_master.h"
-#include "motors.h"
-#include "const.h"
 #include "ir.h"
+#include "const.h"
+#include "data_uart.h"
+#include "mpu6050.h"
+#include "mpu6050_dmp.h"
+#include "motors.h"
+#include "soccer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,7 +45,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,8 +55,6 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* I2C Master instance (non-static for use in interrupt handlers) */
-I2C_Master_t i2cMaster;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,20 +125,31 @@ int main(void)
   /* Initialize status LEDs */
   HAL_GPIO_WritePin(GPIOD, LED_2_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_3_Pin | LED_4_Pin, GPIO_PIN_SET);
-  
-  /* Initialize I2C Master */
-  I2C_Master_Init(&i2cMaster, &hi2c3);
-  
+
   /* Initialize application modules */
   dataUart_Init(&huart4);    /* UART for data output */
-  IR_Init(&i2cMaster);       /* Initialize IR sensor interface */
-  /* Disable SLAVE_2 initially if not used */
-  // I2C_Master_SetSlaveEnabled(&i2cMaster, SLAVE_2, false);
-  Mtrs_Init();               /* Initialize motor control module */
+
+  HAL_Delay(10);  // wait 10ms
+
+  /* Initialize I2C bus manager for shared I2C3 peripheral */
+  I2C_BusManager_t i2c3_bus;
+  I2C_Bus_Init(&i2c3_bus, &hi2c3);
+
+  /* Initialize IR sensor module with I2C peripheral */
+  IR_Init(&hi2c3);
+  // Disable IR module for testing
+  // I2C_Module_SetSlaveEnabled(&IR.i2cModule, IR_SLAVE_1, false);
+  // I2C_Module_SetSlaveEnabled(&IR.i2cModule, IR_SLAVE_2, false);
+  // I2C_Find(&huart4, &hi2c3, IR.slaves[0].address);
+  // I2C_Find(&huart4, &hi2c3, IR.slaves[1].address);
+
+  uint16_t addr = 0x68;     // mpu6050
+  I2C_Find(&huart4, &hi2c3, addr);
+  MPU6050_init(&hi2c3);
+  MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
   
-  /* Enable sequential polling mode: automatically read all slaves in order */
-  I2C_Master_EnableSequentialMode(&i2cMaster, IR_SAMPLE_PERIOD_MS);
-  
+  Mtrs_Init();
+
   /* Initialize timing variables */
   uint32_t lastLedToggleTime = HAL_GetTick();
   /* USER CODE END 2 */
@@ -154,23 +164,31 @@ int main(void)
       lastLedToggleTime = currentTime;
     }
 
-    I2C_Master_Process(&i2cMaster);
+    /* Update all sensor data */
+    updateData();
     
-    // /* Control logic based on IR sensor readings */
-    // uint8_t spd = 60;
-    // float angle_deg = 0.0f;
-    // /* Map detected eye to movement direction */
-    // switch (maxEye) {
-    // case 0: case 6: angle_deg = 180.0f; break;
-    // case 1: case 2: angle_deg = 90.0f; break;
-    // case 5: case 4: angle_deg = 270.0f; break;
-    // case 3:  angle_deg = 0.0f; break;
-    // default: spd = 0; break;
-    // }
-    // if (maxValue < IR_DETECTION_THRESHOLD) { spd = 0; }
-    // polarMove(angle_deg, spd);
+    /* Get MPU6050 attitude using API */
+    EulerAngles_t euler;
+    if (MPU6050_DMP_GetEulerAngles(&euler)) {
+      float yaw = euler.yaw;
+      // float roll = euler.roll;
+      // float pitch = euler.pitch;
 
-    HAL_Delay(10);
+      int8_t spd = 50;
+      if (yaw > 10) {
+        mtrs_Set4Speed(-spd, -spd, -spd, -spd);
+      } else if (yaw < -10) {
+        mtrs_Set4Speed(spd, spd, spd, spd);
+      } else {
+        mtrs_Set4Speed(0, 0, 0, 0);
+      }
+    }
+    
+    /* TODO: Implement state machine logic */
+    // State_t SoccerState = getState();
+    // polarMove(0, 60);
+
+    HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -293,7 +311,8 @@ void MPU_Config(void)
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
 
   /** Initializes and configures the Region and the memory to be protected
-  */
+   * DMA Buffer Region (0x30000000-0x300000FF): 256B non-cacheable for I2C DMA
+   */
   MPU_InitStruct.Number = MPU_REGION_NUMBER1;
   MPU_InitStruct.BaseAddress = 0x30000000;
   MPU_InitStruct.Size = MPU_REGION_SIZE_256B;
@@ -301,6 +320,7 @@ void MPU_Config(void)
   MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
   MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
   MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
   MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);

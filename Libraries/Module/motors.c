@@ -190,9 +190,7 @@ void mtr_FindMinimumStartupPWM(MtrID_t mtr_id) {
     return;
   }
   
-  char buffer[64];
-  snprintf(buffer, sizeof(buffer), "\r\n=== Testing Motor %d ===\r\n", mtr_id);
-  dataUart_SendString(buffer);
+  dataUart_PrintMotorTest(mtr_id);
   
   Mtr *mtr = &mtrs[mtr_id];
   const uint16_t test_start = 400;  // Start at 40% (400/1000)
@@ -203,8 +201,7 @@ void mtr_FindMinimumStartupPWM(MtrID_t mtr_id) {
     float duty_percent = (pwm * 100.0f) / PWM_MAX_VALUE;
     
     /* Send current test PWM via UART */
-    snprintf(buffer, sizeof(buffer), "PWM: %4u (%.1f%%)\r\n", pwm, duty_percent);
-    dataUart_SendString(buffer);
+    dataUart_SendFormattedPWM(pwm, duty_percent);
     
     /* Apply PWM directly without minimum threshold enforcement */
     if (mtr->decay_mode == FAST_DECAY) {

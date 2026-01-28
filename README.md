@@ -2,13 +2,24 @@
 
 這是一個基於 STM32H750 微控制器的主控板韌體專案，用於控制多馬達機器人系統並整合 IR 感測器陣列。
 
-## 🎉 最新更新 (v1.0.1 - 2026-01-19)
+## 🎉 最新更新 (v2.3.0 - 2026-01-28)
 
-### 重要改進
-- **I2C Master 最佳化**：改用單次檢查輪詢，搭配智慧重試機制（失敗 5ms、禁用 0ms）
-- **DMA 快取同步**：添加 `SCB_InvalidateDCache` 解決 STM32H7 資料一致性問題
-- **速度控制統一**：所有馬達函數統一使用 0-100 百分比，提升可讀性
-- **更嚴格驗證**：改進緩衝區和資料大小檢查，提升系統穩定性
+### I2C 總線管理器重構
+- **全局總線鎖機制**：實現真正的多模組輪流使用共享 I2C 總線
+- **原子化總線獲取**：`I2C_Bus_TryAcquire()` 確保只有一個模組可佔用總線
+- **自動總線釋放**：傳輸完成、錯誤、超時時自動釋放總線
+- **防止衝突**：消除多模組同時訪問同一 I2C 硬體的競爭條件
+- **支援多總線**：可管理最多 4 條 I2C 總線 (I2C1-I2C4)
+
+### 調試系統重構 (v2.2.0)
+- **模塊化 DEBUG 宏**：為每個模塊獨立控制 UART 打印
+  - `DEBUG_MPU6050`: MPU6050 傳感器數據
+  - `DEBUG_MPU6050_DMP`: MPU6050 姿態數據 (Roll/Pitch/Yaw)
+  - `DEBUG_IR`: IR 感測器眼睛數據
+  - `DEBUG_I2C`: I2C 通訊錯誤和狀態
+  - `DEBUG_MOTORS`: 馬達測試 PWM 值
+- **集中式打印管理**：所有 UART 打印功能移至 `data_uart` 模塊
+- **統一配置**：在 CMakeLists.txt 中統一控制調試輸出
 
 詳見 [CHANGELOG.md](CHANGELOG.md)
 
@@ -43,25 +54,62 @@
 │         STM32H750 主控板                │
 ├─────────────────────────────────────────┤
 │  ┌────────────┐  ┌────────────┐        │
-│  │ I2C Master │  │   Motors   │        │
-│  │  (I2C3)    │  │  (4xPWM)   │        │
+│  │ IR Module  │  │   Motors   │        │
+│  │(I2C3, 2x)  │  │  (4xPWM)   │        │
 │  └────────────┘  └────────────┘        │
 │  ┌────────────┐  ┌────────────┐        │
-│  │ IR Sensors │  │ Data UART  │        │
-│  │  (2 Slave) │  │  (UART4)   │        │
-│  └────────────┘  └────────────┘        │
+│  │  MPU6050   │  │ Data UART  │        │
+│  │  (I2C3)    │  │  (UART4)   │        │
+│  └─────┬──────┘  └────────────┘        │
+│        │                                │
+│  ┌─────┴──────────────────────┐        │
+│  │  I2C Bus Manager (I2C3)    │        │
+│  │  - 原子化總線鎖機制        │        │
+│  │  - 多模組輪流使用          │        │
+│  │  - 先到先得公平調度        │        │
+│  │  - 防止總線衝突            │        │
+│  └────────────────────────────┘        │
+│                                         │
+│  使用通用 I2C 狀態機 (i2c_common)       │
+│  - 原子操作保護                         │
+│  - 溢位安全時間計算                     │
+│  - DMA 優化緩衝區                       │
+│  - 統一錯誤處理                         │
 └─────────────────────────────────────────┘
 ```
 
 ## ✨ 功能特性
 
-### 1. **I2C 主機模組**
-- 支援最多 4 個 I2C 從機裝置
-- DMA 非阻塞式資料接收
-- 順序輪詢模式 (Sequential Polling Mode)
-- 可配置的輪詢間隔
-- 完整的錯誤處理與超時保護
-- 回調機制用於資料處理
+### 1. **通用 I2C 狀態機框架 (i2c_common)**
+
+#### 全局總線管理器 (I2C_BusManager_t)
+- **多模組協調**：MPU6050、IR 等模組安全共享同一 I2C 周邊
+- **原子化獲取**：`I2C_Bus_TryAcquire()` 確保獨佔訪問
+  - 使用 `__disable_irq()/__enable_irq()` 保證原子性
+  - 總線被佔用時返回 false，模組等待下次輪詢
+  - 支援同一模組重入（已擁有時直接返回 true）
+- **自動釋放**：`I2C_Bus_Release()` 在以下時機自動釋放總線
+  - ✅ 傳輸完成後 (PROCESSING → IDLE)
+  - ✅ 超時錯誤時 (READING timeout → ERROR)
+  - ✅ I2C 錯誤回調時 (ErrorCallback)
+  - ✅ 錯誤恢復完成後 (ERROR → IDLE)
+  - ✅ DMA 啟動失敗時 (ReadSlave failure)
+- **先到先得調度**：公平的總線訪問機制
+  - 早到模組優先獲得總線
+  - 晚到模組自動等待並在下次輪詢重試
+- **防止衝突**：徹底消除多模組同時訪問 I2C 硬體的競爭條件
+
+#### 通用狀態機特性
+- 可重用的狀態機，支援任意 I2C 模組
+- 支援最多 4 個從機裝置（每個模組）
+- DMA 非阻塞式資料傳輸
+- 順序輪詢模式或手動控制
+- **動態從機管理**：自動跳過禁用的從機
+- 完整的錯誤處理與超時保護（溢位安全）
+- 原子操作保護，消除競態條件
+- 回調驅動的數據處理
+- 支援寫後讀（register-based）和直接讀取模式
+- 32-byte 對齊的 DMA 緩衝區
 
 ### 2. **馬達控制系統**
 - 4 個獨立 DC 馬達控制 (FL, FR, RL, RR)
@@ -80,7 +128,21 @@
 - 自動偵測最大值與位置
 - 即時資料串流輸出
 
-### 4. **UART 資料輸出**
+### 4. **MPU6050 IMU 模塊**
+- 6 軸慣性測量單元 (3 軸加速度 + 3 軸陀螺儀)
+- 互補濾波器 (Complementary Filter) 姿態估計
+- 實時 Roll/Pitch/Yaw 計算
+- 四元數輸出支援
+- 溫度讀取
+
+### 5. **模塊化調試系統**
+- **獨立 DEBUG 宏**：每個模塊可單獨啟用/禁用調試輸出
+- **集中式打印管理**：所有 UART 打印函數位於 data_uart 模塊
+- **統一配置**：在 CMakeLists.txt 中控制所有調試輸出
+- **格式化輸出**：專用的打印函數用於不同類型的數據
+- **節省資源**：Release 版本可完全禁用調試輸出
+
+### 6. **UART 資料輸出**
 - 格式化資料傳輸
 - 感測器數值顯示
 - 調試訊息輸出
@@ -96,49 +158,48 @@ mainboard/
 │   │   ├── i2c.h
 │   │   ├── tim.h
 │   │   ├── usart.h
-│   │   └── ...
+│   │   └── stm32h7xx_it.h
 │   └── Src/                   # HAL 實作檔案
 │       ├── main.c             # 主程式進入點
 │       ├── i2c.c
 │       ├── tim.c
+│       ├── stm32h7xx_it.c     # 中斷處理
 │       └── ...
 │
 ├── Libraries/                 # 自訂函式庫
-│   ├── const.h                # 全域常數定義
+│   ├── const.h                # 全域常數與 DMA 緩衝區定義
+│   ├── soccer.h/c             # 上層邏輯
 │   │
-│   ├── I2C/                   # I2C 主機函式庫
-│   │   ├── i2c_master.h
-│   │   └── i2c_master.c       # DMA-based I2C master 實作
+│   ├── i2c_common.h/c         # 🆕 通用 I2C 狀態機框架
 │   │
-│   ├── Module/                # 週邊模組
-│   │   ├── motors.h
-│   │   ├── motors.c           # 馬達控制實作
-│   │   ├── ir.h
-│   │   └── ir.c               # IR 感測器介面
+│   ├── Module/                # 週邊模組（使用 i2c_common）
+│   │   ├── ir.h/c             # IR 感測器模組
+│   │   ├── mpu6050.h/c        # 🆕 MPU6050 IMU 模組
+│   │   ├── mpu6050_dmp.h/c    # 🆕 MPU6050 姿態估計
+│   │   └── motors.h/c         # 馬達控制實作
 │   │
 │   └── Uart/                  # UART 通訊
 │       ├── data_uart.h
-│       └── data_uart.c        # 格式化資料輸出
+│       └── data_uart.c        # 🆕 格式化資料輸出與調試打印
 │
 ├── Drivers/                   # STM32 HAL 驅動程式
 │   ├── CMSIS/                 # ARM CMSIS 標頭檔
 │   └── STM32H7xx_HAL_Driver/  # STM32H7 HAL 函式庫
 │
+├── Doc/                       # 📚 文檔
+│   ├── I2C_COMMON_USAGE.md           # 🆕 通用 I2C 框架使用指南
+│   ├── I2C_Communication_Setup_Guide.md
+│   └── I2C_MASTER_USAGE.md           # ⚠️ 已棄用
+│
 ├── cmake/                     # CMake 建構系統
-│   ├── gcc-arm-none-eabi.cmake
-│   └── stm32cubemx/
-│
 ├── build/                     # 建構輸出目錄
-│
-├── CMakeLists.txt             # 主 CMake 設定
-├── CMakePresets.json          # CMake 預設配置
+├── CMakeLists.txt
+├── CMakePresets.json
 ├── mainboard.ioc              # STM32CubeMX 專案檔
-├── startup_stm32h750xx.s      # 啟動程式碼
-├── STM32H750XX_FLASH.ld       # 連結器腳本
-│
-├── I2C_Communication_Setup_Guide.md   # I2C 設定指南
-├── I2C_MASTER_USAGE.md                # I2C 主機使用說明
-└── README.md                          # 本文件
+├── startup_stm32h750xx.s
+├── STM32H750XX_FLASH.ld
+├── CHANGELOG.md               # 版本變更記錄
+└── README.md                  # 本文件
 ```
 
 ## 🔨 編譯與燒錄
@@ -192,11 +253,20 @@ Task: Build + Flash
 ## ⚙️ 硬體配置
 
 ### I2C3 配置
-- **用途**: IR 感測器通訊
-- **從機 1**: 0x30 (左偏)
-- **從機 2**: 0x31 (右偏)
-- **DMA**: DMA1 Stream 用於接收
-- **緩衝區位置**: 0x30000000 (SRAM_D2)
+- **用途**: IR 感測器（2個從機）+ MPU6050 IMU
+- **IR 從機 1**: 0x30 (7個感測器)
+- **IR 從機 2**: 0x31 (7個感測器)
+- **MPU6050**: 0x68
+- **DMA**: DMA1 Stream 0/1 (RX/TX)
+- **緩衝區**: 0x30000000 (SRAM_D2, 非快取)
+- **狀態機**: 使用 `i2c_common` 通用框架
+- **記憶體配置**:
+  ```
+  0x30000000: IR Slave 1 RX  (16B, 32B aligned)
+  0x30000020: IR Slave 2 RX  (16B, 32B aligned)
+  0x30000040: MPU6050 TX     (1B,  32B aligned)
+  0x30000060: MPU6050 RX     (14B, 32B aligned)
+  ```
 
 ### 定時器配置
 
@@ -212,7 +282,7 @@ Task: Build + Flash
 
 | UART   | 用途           | 鮑率       |
 |--------|----------------|------------|
-| UART4  | 資料輸出       | 115200     |
+| UART4  | 資料輸出       | 9600       |
 | UART5  | 保留           | 115200     |
 | UART7  | 保留           | 115200     |
 | UART8  | 保留           | 115200     |
@@ -227,57 +297,242 @@ Task: Build + Flash
 
 ## 📚 模組說明
 
-### I2C Master 模組 (`i2c_master.c`)
+### 通用 I2C 狀態機 (`i2c_common.c`)
 
-#### 主要特性
-- DMA 非阻塞式接收
-- 雙緩衝機制 (RX Buffer + Process Buffer)
-- 狀態機管理 (IDLE, READING, PROCESSING, ERROR)
-- 自動超時處理
-- 可選擇順序輪詢或手動控制
+#### 架構特性
+- **可重用設計**: 一次編寫，所有 I2C 模組共用
+- **線程安全**: 所有狀態轉換使用原子操作 (`__disable_irq`)
+- **溢位安全**: `TIME_DIFF` 巨集處理 tick 溢位，可靠運行 >49 天
+- **DMA 優化**: 32-byte 對齊緩衝區，非快取記憶體區域
+- **動態從機管理**: 自動跳過禁用的從機，運行時可啟用/禁用
+- **雙模式支援**:
+  - **寫後讀模式**: 先寫暫存器地址，再 DMA 讀取（MPU6050）
+  - **直接讀模式**: 不寫入，直接 DMA 讀取（IR 感測器）
+
+#### 狀態機流程
+
+**帶總線管理器的完整流程** (v2.3.0):
+```
+IDLE → 總線獲取 → READING (DMA) → PROCESSING → 總線釋放 → IDLE
+  ↓       ↓            ↓              ↓            ↓
+  輪詢   TryAcquire   HAL_I2C_Mem    RX完成(ISR)   Release
+  間隔   (成功)       _Read_DMA      回調處理      (自動)
+  到期                (HAL內部處理
+                      寄存器寫入)
+  
+  總線獲取失敗 → 等待下次輪詢
+       ↓
+    其他模組正在使用總線
+```
+
+**錯誤處理流程**:
+```
+READING (超時) → ERROR → 等待恢復 → I2C重置 → 總線釋放 → IDLE
+       ↓           ↓         ↓          ↓          ↓
+    200ms無響應  記錄錯誤   200ms   DeInit/Init  Release
+```
+
+**兩種讀取模式**:
+
+1. **寫後讀模式** (MPU6050, txSize=1):
+   - 使用 `HAL_I2C_Mem_Read_DMA(hi2c, devAddr, memAddr, memSize, pData, size, timeout)`
+   - **自動化操作**：HAL 內部先發送寄存器地址，然後執行 DMA 讀取
+   - **適用場景**：讀取特定寄存器的傳感器數據
+   - **範例**：MPU6050 讀取 0x3B 寄存器（加速度+陀螺儀數據）
+   - **優點**：一次函數調用完成寫後讀，代碼簡潔
+
+2. **直接讀模式** (IR, txSize=0):
+   - 使用 `HAL_I2C_Master_Receive_DMA(hi2c, devAddr, pData, size, timeout)`
+   - **直接讀取**：不發送任何寄存器地址，直接從從機讀取數據流
+   - **適用場景**：從機自動輸出當前數據（無需指定寄存器）
+   - **範例**：IR 傳感器陣列連續輸出眼睛數據
+   - **優點**：更快速，適合流式數據讀取
+
+**總線管理器整合** (v2.3.0):
+- 兩種模式都在 `I2C_Module_ReadSlave()` 中**自動獲取總線**
+- 使用 `do-while(0)` 模式統一錯誤處理
+- 所有錯誤路徑（狀態檢查失敗、硬體忙、DMA 失敗）都會**自動釋放總線**
+- 確保即使發生錯誤，總線也不會被永久佔用
 
 #### API 使用範例
 
+**創建新 I2C 模組**:
+
 ```c
-// 初始化
-I2C_Master_t i2cMaster;
-I2C_Master_Init(&i2cMaster, &hi2c3);
+// 1. 定義模組結構
+typedef struct {
+  bool dataReady;
+  uint16_t sensorValue;
+  
+  I2C_Module_t i2cModule;    // 通用狀態機
+  I2C_SlaveDevice_t slaves[2]; // 從機陣列
+} MyModule_t;
 
-// 註冊從機
-uint8_t rxBuf[16], procBuf[16];
-I2C_Master_RegisterSlave(&i2cMaster, 0x30 << 1, rxBuf, procBuf, 16);
+// 2. 實現數據處理回調
+static void MyModule_DataCallback(I2C_Module_t *module, uint8_t slaveId) {
+  // 數據已在 processBuffer，直接處理
+  MyModule.sensorValue = module->slaves[slaveId].processBuffer[0];
+  MyModule.dataReady = true;
+}
 
-// 設定回調
-I2C_Master_SetSlaveCallback(&i2cMaster, 0, MyCallback);
+// 3. 初始化模組（main.c 中的完整範例）
+int main(void) {
+  // ... HAL 初始化 ...
+  MX_I2C3_Init();
+  
+  /* 🔑 步驟 1: 初始化總線管理器（多模組共享時必須）*/
+  I2C_BusManager_t i2c3_bus;
+  I2C_Bus_Init(&i2c3_bus, &hi2c3);
+  
+  /* 🔑 步驟 2: 初始化使用 hi2c3 的模組 */
+  IR_Init(&hi2c3);       // IR 模組使用 hi2c3
+  MPU6050_init(&hi2c3);  // MPU6050 模組也使用 hi2c3
+  
+  // ... 其他初始化 ...
+}
 
-// 啟用順序輪詢模式
-I2C_Master_EnableSequentialMode(&i2cMaster, 20);  // 20ms 間隔
+void MyModule_Init(I2C_HandleTypeDef *hi2c) {
+  // 設置從機（緩衝區必須在非快取記憶體）
+  MyModule.slaves[0].address = 0x30 << 1;
+  MyModule.slaves[0].txBuffer = txBufferDMA;  // NULL = 直接讀
+  MyModule.slaves[0].rxBuffer = rxBufferDMA;
+  MyModule.slaves[0].processBuffer = processBuffer;
+  MyModule.slaves[0].bufferSize = 16;
+  MyModule.slaves[0].txSize = 1;  // 0=直接讀, >0=寫後讀
+  MyModule.slaves[0].enabled = true;
+  
+  // 初始化通用狀態機
+  I2C_Module_Init(
+    &MyModule.i2cModule,
+    hi2c,
+    MyModule.slaves,
+    2,                          // 從機數量
+    20,                         // 輪詢間隔 (ms)
+    MyModule_DataCallback       // 處理回調
+  );
+}
 
-// 主迴圈中處理
-while(1) {
-    I2C_Master_Process(&i2cMaster);
+// 4. 主迴圈處理
+void MyModule_Process(void) {
+  I2C_Module_Process(&MyModule.i2cModule);
+}
+
+// 5. 中斷回調（在 stm32h7xx_it.c 中）
+void MyModule_RxCallback(I2C_HandleTypeDef *hi2c) {
+  I2C_Module_RxCallback(&MyModule.i2cModule, hi2c);
+}
+
+void MyModule_TxCallback(I2C_HandleTypeDef *hi2c) {
+  I2C_Module_TxCallback(&MyModule.i2cModule, hi2c);
+}
+
+void MyModule_ErrorCallback(I2C_HandleTypeDef *hi2c) {
+  I2C_Module_ErrorCallback(&MyModule.i2cModule, hi2c);
 }
 ```
 
-#### 中斷處理
+#### 中斷處理（stm32h7xx_it.c）
 
-在 `stm32h7xx_it.c` 中需要呼叫回調:
+**重要**：`HAL_I2C_Mem_Read_DMA()` 使用不同的回調函數！
 
 ```c
-void I2C3_EV_IRQHandler(void) {
-    HAL_I2C_EV_IRQHandler(&hi2c3);
-}
-
-void I2C3_ER_IRQHandler(void) {
-    HAL_I2C_ER_IRQHandler(&hi2c3);
-}
-
+/* 🔹 直接讀模式回調（HAL_I2C_Master_Receive_DMA）*/
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-    if(hi2c->Instance == I2C3) {
-        I2C_Master_RxCallback(&i2cMaster, hi2c);
-    }
+  // 派發到所有使用直接讀的模組（IR 感測器）
+  IR_RxCallback(hi2c);
+}
+
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+  // 直接讀模式不需要 TX（IR 無 TX）
+}
+
+/* 🔸 寫後讀模式回調（HAL_I2C_Mem_Read_DMA）*/
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+  // 派發到所有使用寫後讀的模組（MPU6050）
+  MPU6050_RxCallback(hi2c);
+}
+
+/* ⚠️ 錯誤回調（兩種模式共用）*/
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
+  IR_ErrorCallback(hi2c);
+  MPU6050_ErrorCallback(hi2c);
 }
 ```
+
+**回調函數說明**：
+- `HAL_I2C_Master_Receive_DMA()` → `HAL_I2C_MasterRxCpltCallback()`
+  - 用於直接讀模式（txSize = 0）
+  - 範例：IR 感測器陣列
+  
+- `HAL_I2C_Mem_Read_DMA()` → `HAL_I2C_MemRxCpltCallback()`
+  - 用於寫後讀模式（txSize > 0）
+  - 範例：MPU6050 讀取寄存器
+  - HAL 內部先發送寄存器地址，完成後自動啟動 RX DMA
+  
+- `HAL_I2C_ErrorCallback()`
+  - 兩種模式共用
+  - 處理總線錯誤、NACK、仲裁丟失等錯誤
+
+#### Bus Manager API 函數
+
+**初始化總線管理器**:
+```c
+void I2C_Bus_Init(I2C_BusManager_t *manager, I2C_HandleTypeDef *hi2c);
+```
+- 在 `main.c` 中模組初始化之前調用
+- 註冊到全局 `busManagers[]` 陣列（最多 4 條總線）
+- 初始化總線為空閒狀態（owner = NULL, locked = false）
+
+**獲取總線管理器**:
+```c
+I2C_BusManager_t* I2C_Bus_GetManager(I2C_HandleTypeDef *hi2c);
+```
+- 根據 `hi2c` 指針查找對應的總線管理器
+- 在 `I2C_Module_ReadSlave()` 中調用一次並重用
+- 返回 NULL 表示總線未初始化
+
+**嘗試獲取總線所有權**:
+```c
+bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager, I2C_Module_t *module);
+```
+- **原子操作**：使用 `__disable_irq()` 保護
+- 返回 true：成功獲取，可以開始 DMA 傳輸
+- 返回 false：總線被其他模組佔用，等待下次輪詢
+- 同一模組重入：已擁有總線時直接返回 true
+
+**釋放總線所有權**:
+```c
+void I2C_Bus_Release(I2C_BusManager_t *manager, I2C_Module_t *module);
+```
+- **原子操作**：使用 `__disable_irq()` 保護
+- 只有擁有者可以釋放總線（所有權檢查）
+- 自動在以下情況調用：
+  - ✅ 正常完成：`I2C_STATE_PROCESSING` 結束
+  - ✅ 超時錯誤：`I2C_STATE_READING` 超時
+  - ✅ I2C 錯誤：`ErrorCallback` 中
+  - ✅ 錯誤恢復：`I2C_STATE_ERROR` 恢復完成
+  - ✅ DMA 失敗：`ReadSlave` 啟動失敗
+
+#### 關鍵設計決策
+
+1. **為何需要 Bus Manager？**
+   - STM32 的 I2C 周邊硬體只有一套寄存器
+   - 多個模組同時訪問會造成寄存器衝突
+   - Bus Manager 提供軟體層級的互斥鎖
+
+2. **為何 TX 用 IT，RX 用 DMA？**
+   - TX 通常只有 1 byte（暫存器地址），IT 更高效
+   - RX 可能 14-16 bytes，DMA 釋放 CPU
+
+3. **為何在主迴圈啟動 DMA？**
+   - 避免在中斷中啟動 DMA（HAL 可能未就緒）
+   - 允許完整的錯誤處理和超時重置
+   - 使用 `READY_TO_READ` 狀態作為標誌
+
+4. **為何 memcpy 在中斷？**
+   - 防止下次 DMA 覆蓋 rxBuffer
+   - 小緩衝區（<= 16B）複製非常快（< 1μs）
+   - 數據處理回調在主迴圈執行
 
 ### 馬達控制模組 (`motors.c`)
 
@@ -339,6 +594,30 @@ mtr_TestAcceleration(MTR0, 5, 100); // 加速度測試
 
 ### IR 感測器模組 (`ir.c`)
 
+#### 調試功能
+
+在 [ir.h](Libraries/Module/ir.h) 中定義 `IR_DEBUG` 宏可啟用 UART 調試輸出：
+
+```c
+// 在 ir.h 頂部
+#define IR_DEBUG  // 取消註解以啟用調試輸出
+```
+
+啟用後，每次接收到 IR 數據會輸出：
+```
+Eye:3 Val:1024
+```
+
+#### 禁用從機
+
+可以在 `IR_Init()` 中設置 `enabled = false` 來禁用特定從機：
+
+```c
+IR.slaves[IR_SLAVE_2].enabled = false;  // 禁用第二個從機
+```
+
+狀態機會自動跳過禁用的從機，只輪詢已啟用的從機。
+
 #### 資料格式
 
 每個從機傳送 16 bytes:
@@ -349,21 +628,24 @@ mtr_TestAcceleration(MTR0, 5, 100); // 加速度測試
 #### API 使用範例
 
 ```c
-// 初始化
-IR_Init(&i2cMaster);
+// 初始化 IR 模組
+IR_Init(&hi2c3);
 
-// 手動讀取 (使用順序模式時不需要)
-IR_ReadData(SLAVE_1);
-
-// 檢查資料是否就緒
-if(IR_IsDataReady(SLAVE_1)) {
-    // 處理資料 (回調中自動執行)
-    IR_ClearDataReady(SLAVE_1);
+// 主迴圈中處理狀態機
+while(1) {
+    IR_Process();  // 自動每 20ms 輪詢兩個從機
+    
+    if (IR.dataReady) {
+        // 使用感測器數據
+        printf("Max Eye: %d, Value: %d\n", IR.maxEye, IR.maxValue);
+        IR.dataReady = false;
+    }
 }
 
-// 全域變數
-extern uint8_t maxEye;      // 最大值的感測器編號 (0-6)
-extern uint16_t maxValue;   // 最大感測器數值
+// 訪問所有感測器數據
+for (int i = 0; i < 14; i++) {
+    uint16_t value = IR.eyeValues[i];
+}
 ```
 
 ### UART 資料輸出模組 (`data_uart.c`)
@@ -402,43 +684,145 @@ int main(void) {
     // ... 其他 TIM
     
     // 3. 應用層初始化
-    I2C_Master_Init(&i2cMaster, &hi2c3);
     dataUart_Init(&huart4);
-    IR_Init(&i2cMaster);
-    Mtrs_Init();
+    IR_Init(&hi2c3);       // IR 感測器模組
+    MPU6050_Init(&hi2c3);  // MPU6050 IMU 模組
+    Mtrs_Init();           // 馬達控制
     
-    // 4. 啟用 I2C 順序輪詢
-    I2C_Master_EnableSequentialMode(&i2cMaster, 20);  // 20ms
-    
-    // 5. 主迴圈
+    // 4. 主迴圈
     while(1) {
         // 狀態 LED 心跳
         HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
         
-        // 處理 I2C 通訊
-        I2C_Master_Process(&i2cMaster);
+        // 更新所有感測器數據
+        updateData(HAL_GetTick());
         
-        // 根據 IR 資料控制馬達 (範例)
-        // if(maxValue > IR_DETECTION_THRESHOLD) {
-        //     polarMove(GetAngleFromSensor(maxEye), 60);
-        // }
+        // 根據感測器數據控制馬達 (範例)
+        if(IR.maxValue > IR_DETECTION_THRESHOLD) {
+            polarMove(GetAngleFromSensor(IR.maxEye), 60);
+        }
         
         HAL_Delay(10);
     }
 }
 ```
 
-## 🛠️ 開發指南
+## � 調試配置
 
-### 新增 I2C 從機
+### 模塊化 DEBUG 宏
 
-1. 在 `const.h` 中定義 DMA 緩衝區地址
-2. 註冊從機:
-```c
-uint8_t rxBuf[SIZE], procBuf[SIZE];
-I2C_Master_RegisterSlave(&i2cMaster, ADDR, rxBuf, procBuf, SIZE);
+本專案使用模塊化的 DEBUG 宏系統，可為每個模塊單獨控制調試輸出。
+
+#### 啟用/禁用 DEBUG 輸出
+
+在 [CMakeLists.txt](CMakeLists.txt#L68-L76) 中取消註解相應的 DEBUG 宏：
+
+```cmake
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    # 取消註解以下行來啟用各模塊的調試輸出
+    DEBUG_MPU6050        # MPU6050 傳感器數據和初始化
+    DEBUG_MPU6050_DMP    # MPU6050 姿態 (Roll/Pitch/Yaw)
+    DEBUG_IR             # IR 感測器眼睛數據
+    DEBUG_I2C            # I2C 通訊錯誤和狀態
+    DEBUG_MOTORS         # 馬達測試 PWM 值
+)
 ```
-3. 設定回調函數處理資料
+
+#### DEBUG 宏對照表
+
+| DEBUG 宏 | 模塊 | 輸出內容 | 函數 |
+|------------|------|----------|------|
+| `DEBUG_MPU6050` | MPU6050 | 傳感器數據 (Ax/Ay/Az/Gx/Gy/Gz/T)<br>初始化消息 | `dataUart_PrintMPU6050Data()`<br>`dataUart_PrintInitMessage()` |
+| `DEBUG_MPU6050_DMP` | MPU6050 DMP | 姿態數據 (Roll/Pitch/Yaw)<br>初始化消息 | `dataUart_PrintMPU6050Attitude()`<br>`dataUart_PrintInitMessage()` |
+| `DEBUG_IR` | IR 感測器 | 眼睛數據 (Eye/Val)<br>IR 數據解析 | `dataUart_PrintIRData()`<br>`ParseAndDisplayIRData()` |
+| `DEBUG_I2C` | I2C 通訊 | I2C 錯誤信息<br>I2C 超時<br>RX 回調計數<br>設備發現 | `dataUart_PrintI2CError()`<br>`dataUart_PrintI2CStatus()`<br>`dataUart_PrintDeviceFound()`<br>`DisplayRawHexData()` |
+| `DEBUG_MOTORS` | 馬達 | 測試標題<br>PWM 值 | `dataUart_PrintMotorTest()`<br>`dataUart_SendFormattedPWM()` |
+
+#### 輸出範例
+
+**DEBUG_MPU6050**:
+```
+MPU6050 Ready
+Ax=0.12 Ay=-0.03 Az=0.98 Gx=0.5 Gy=-0.2 Gz=0.1 T=25.3
+```
+
+**DEBUG_MPU6050_DMP**:
+```
+MPU6050: Complementary Filter Ready
+Roll=2.3 Pitch=-1.5 Yaw=45.2
+```
+
+**DEBUG_IR**:
+```
+Eye:3 Val:1024 | S0:[100,200,300,400,500,600,700] S1:[150,250,350,450,550,650,750]
+```
+
+**DEBUG_I2C**:
+```
+Device found at 0x68
+RxCallback: 50
+I2C_Error: Code=0x4, Slave=1
+```
+
+**DEBUG_MOTORS**:
+```
+=== Testing Motor 0 ===
+PWM: 400 (40.0%)
+PWM: 420 (42.0%)
+```
+
+#### 最佳實踐
+
+1. **啟動時啟用所有 DEBUG**：確認所有模塊正常運作
+2. **優化時禁用不需要的 DEBUG**：減少 UART 負載
+3. **Release 版本禁用所有 DEBUG**：節省 Flash 和 RAM
+4. **具體問題排查**：只啟用相關模塊的 DEBUG
+
+### data_uart 模塊
+
+所有調試打印函數集中在 [data_uart.c](Libraries/Uart/data_uart.c) 中，提供以下優點：
+
+- ✅ **集中管理**：所有 UART 打印邏輯在一個模塊
+- ✅ **統一格式**：一致的輸出格式
+- ✅ **易於維護**：修改格式只需一處
+- ✅ **安全檢查**：所有函數包含 NULL 檢查和緩衝區溢位保護
+
+---
+
+## �🛠️ 開發指南
+
+### 新增 I2C 模組
+
+使用通用 I2C 狀態機框架，大幅簡化開發。詳細指南請參考 [I2C_COMMON_USAGE.md](Doc/I2C_COMMON_USAGE.md)
+
+**快速步驟**:
+
+1. **創建模組結構體**（包含 `I2C_Module_t`）
+2. **實現數據處理回調**（只需處理 `processBuffer` 中的數據）
+3. **配置從機設備**（設置地址、緩衝區、txSize）
+4. **初始化**（調用 `I2C_Module_Init()`）
+5. **處理**（在主迴圈調用 `YourModule_Process()`）
+6. **註冊回調**（在 `stm32h7xx_it.c` 添加回調派發）
+
+**完整範例請參考**: 
+- [ir.c](Libraries/Module/ir.c) - 直接讀模式
+- [mpu6050.c](Libraries/Module/mpu6050.c) - 寫後讀模式
+
+### DMA 緩衝區配置
+
+**重要**: 所有 DMA 緩衝區必須位於非快取記憶體區域！
+
+在 `const.h` 中定義:
+```c
+// 在 0x30000000 的 MPU 非快取區域
+#define YOUR_MODULE_TXBUF_PTR ((uint8_t *)(0x30000000 + offset))
+#define YOUR_MODULE_RXBUF_PTR ((uint8_t *)(0x30000000 + offset + 32))
+```
+
+建議:
+- 每個緩衝區對齊到 32-byte 邊界
+- 總計不超過 256 bytes (MPU Region 1 大小)
+- 當前使用: 128 bytes / 256 bytes
 
 ### 修改馬達數量
 
@@ -480,8 +864,10 @@ I2C_Master_RegisterSlave(&i2cMaster, ADDR, rxBuf, procBuf, SIZE);
 
 ## 📖 相關文件
 
-- [I2C_Communication_Setup_Guide.md](I2C_Communication_Setup_Guide.md) - I2C 硬體與軟體設定詳解
-- [I2C_MASTER_USAGE.md](I2C_MASTER_USAGE.md) - I2C Master 函式庫使用指南
+- [DEBUG_SYSTEM.md](Doc/DEBUG_SYSTEM.md) - 🆕 調試系統使用指南
+- [I2C_COMMON_USAGE.md](Doc/I2C_COMMON_USAGE.md) - 通用 I2C 狀態機使用指南
+- [I2C_Communication_Setup_Guide.md](Doc/I2C_Communication_Setup_Guide.md) - I2C 硬體與軟體設定詳解
+- [I2C_MASTER_USAGE.md](Doc/I2C_MASTER_USAGE.md) - ⚠️ 已棄用，參考 I2C_COMMON_USAGE.md
 - [STM32H750 資料手冊](https://www.st.com/resource/en/datasheet/stm32h750xb.pdf)
 - [STM32H7 參考手冊](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
 

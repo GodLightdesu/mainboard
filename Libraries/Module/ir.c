@@ -1,8 +1,10 @@
-#include "ir.h"
+                         #include "ir.h"
 
-/* Private variables */
-static I2C_Master_t *g_i2cMaster = NULL;
-static uint16_t eyeValues[IR_SLAVES_NO * EYE_NUM] = {0};
+/* Global IR instance */
+IR_t IR = {0};
+
+/* Track which slaves have fresh data in current polling cycle */
+static uint8_t freshDataMask = 0;
 
 /* DMA buffers using predefined RAM_D2 addresses from const.h */
 static uint8_t *rxBuffer1 = IR_SLAVE1_RXBUF_PTR;
@@ -10,61 +12,110 @@ static uint8_t *rxBuffer2 = IR_SLAVE2_RXBUF_PTR;
 static uint8_t processBuffer1[IR_BUFFER_SIZE];
 static uint8_t processBuffer2[IR_BUFFER_SIZE];
 
-/* Public variables */
-uint8_t maxEye = 0; 
-uint16_t maxValue = 0;
+/* Helper function to combine MSB and LSB */
+static uint16_t combine_data(uint8_t msb, uint8_t lsb) { 
+  return (uint16_t)((msb << 8) | lsb);
+}
 
-static void IR_DataReadyCallback(uint8_t slaveId, uint8_t* data, uint16_t size) {
-  if (data == NULL || size != IR_BUFFER_SIZE || slaveId >= IR_SLAVES_NO) {
-    return;
-  }
+/* Data processing callback - called by generic I2C module */
+static void IR_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
+  if (slaveId >= IR_SLAVES_NO) return;
   
-  /* Buffer layout: [Vref_LSB, Vref_MSB, eye0_LSB, eye0_MSB, ...] */
+  I2C_SlaveDevice_t *slave = &IR.slaves[slaveId];
+  if (!slave->enabled || slave->processBuffer == NULL) return;
+  
+  /* Parse sensor data: [Vref_LSB, Vref_MSB, eye0_LSB, eye0_MSB, ...] */
   const uint16_t offset = slaveId * EYE_NUM;
   for (uint8_t i = 0; i < EYE_NUM; i++) {
     const uint8_t idx = 2 + (i * 2);  // Skip Vref (first 2 bytes)
-    if (idx + 1 < size) {
-      eyeValues[offset + i] = combine_data(data[idx + 1], data[idx]);  // MSB, LSB
-    }
+    IR.eyeValues[offset + i] = combine_data(slave->processBuffer[idx + 1], slave->processBuffer[idx]);
   }
   
-  if (slaveId == IR_SLAVES_NO - 1) {
-    maxValue = 0;
-    maxEye = 0;
-    for (uint16_t i = 0; i < IR_SLAVES_NO * EYE_NUM; i++) {
-      if (eyeValues[i] > maxValue) {
-        maxValue = eyeValues[i];
-        maxEye = i % EYE_NUM;
+  /* Mark fresh data and check if all enabled slaves are ready */
+  __disable_irq();
+  freshDataMask |= (1 << slaveId);
+  
+  /* Calculate enabled mask inline */
+  uint8_t enabledMask = 0;
+  for (uint8_t s = 0; s < IR_SLAVES_NO; s++) {
+    if (IR.slaves[s].enabled) enabledMask |= (1 << s);
+  }
+  
+  /* All enabled slaves have fresh data? */
+  if (freshDataMask == enabledMask) {
+    freshDataMask = 0;  // Reset for next cycle
+    __enable_irq();
+    
+    /* Find maximum value across all enabled eyes */
+    IR.maxValue = 0;
+    IR.maxEye = 0;
+    for (uint8_t eye = 0; eye < IR_SLAVES_NO * EYE_NUM; eye++) {
+      const uint8_t slaveIdx = eye / EYE_NUM;
+      if (IR.slaves[slaveIdx].enabled && IR.eyeValues[eye] > IR.maxValue) {
+        IR.maxValue = IR.eyeValues[eye];
+        IR.maxEye = eye;
       }
     }
+    IR.dataReady = true;
     
-    /* Print data when all slaves have been read */
-    char outputStr[100];
-    int len = snprintf(outputStr, sizeof(outputStr), "Eye:%d Val:%d\r\n", maxEye, maxValue);
-    HAL_UART_Transmit(&huart4, (const uint8_t *)outputStr, len, 100);
+    /* Debug output */
+    dataUart_PrintIRData(IR.maxEye, IR.maxValue, IR.eyeValues);
   }
 }
 
-void IR_Init(I2C_Master_t *i2cMaster) {
-  if (i2cMaster == NULL) { return; }
+void IR_Init(I2C_HandleTypeDef *hi2c) {
+  if (hi2c == NULL) return;
   
-  g_i2cMaster = i2cMaster;
+  /* Initialize IR structure */
+  memset(&IR, 0, sizeof(IR_t));
+  IR.dataReady = false;
+  
+  /* Setup slave 1 */
+  IR.slaves[IR_SLAVE_1].address = IR_SLAVE_1_ADDR;
+  IR.slaves[IR_SLAVE_1].txBuffer = NULL;  // Direct read, no TX needed
+  IR.slaves[IR_SLAVE_1].rxBuffer = rxBuffer1;
+  IR.slaves[IR_SLAVE_1].processBuffer = processBuffer1;
+  IR.slaves[IR_SLAVE_1].bufferSize = IR_BUFFER_SIZE;
+  IR.slaves[IR_SLAVE_1].txSize = 0;  // 0 = direct read without register write
+  IR.slaves[IR_SLAVE_1].enabled = true;  // Enabled
+  
+  /* Setup slave 2 - TEMPORARILY DISABLED FOR TESTING */
+  IR.slaves[IR_SLAVE_2].address = IR_SLAVE_2_ADDR;
+  IR.slaves[IR_SLAVE_2].txBuffer = NULL;  // Direct read, no TX needed
+  IR.slaves[IR_SLAVE_2].rxBuffer = rxBuffer2;
+  IR.slaves[IR_SLAVE_2].processBuffer = processBuffer2;
+  IR.slaves[IR_SLAVE_2].bufferSize = IR_BUFFER_SIZE;
+  IR.slaves[IR_SLAVE_2].txSize = 0;  // 0 = direct read without register write
+  IR.slaves[IR_SLAVE_2].enabled = true;  // DISABLED - Only use slave 1 for now
+  
+  /* Clear buffers */
+  if (rxBuffer1) memset(rxBuffer1, 0, IR_BUFFER_SIZE);
+  if (rxBuffer2) memset(rxBuffer2, 0, IR_BUFFER_SIZE);
+  memset(processBuffer1, 0, IR_BUFFER_SIZE);
+  memset(processBuffer2, 0, IR_BUFFER_SIZE);
+  
+  /* Initialize generic I2C module with data processing callback */
+  I2C_Module_Init(
+    &IR.i2cModule,
+    hi2c,
+    IR.slaves,
+    IR_SLAVES_NO,
+    IR_SAMPLE_PERIOD_MS,
+    IR_DataProcessCallback
+  );
+}
 
-  if (rxBuffer1 == NULL || rxBuffer2 == NULL) {
-    return;
-  }
-  
-  StatusTypeDef status1 = I2C_Master_RegisterSlave(i2cMaster, IR_SLAVE_1_ADDR, rxBuffer1, processBuffer1, IR_BUFFER_SIZE);
-  StatusTypeDef status2 = I2C_Master_RegisterSlave(i2cMaster, IR_SLAVE_2_ADDR, rxBuffer2, processBuffer2, IR_BUFFER_SIZE);
-  
-  if (status1 != ALL_OK || status2 != ALL_OK) {
-    return;
-  }
-  
-  I2C_Master_SetSlaveCallback(i2cMaster, SLAVE_1, IR_DataReadyCallback);
-  I2C_Master_SetSlaveCallback(i2cMaster, SLAVE_2, IR_DataReadyCallback);
+void IR_Process(void) {
+  /* Delegate to common I2C module state machine */
+  I2C_Module_Process(&IR.i2cModule);
+}
 
-  maxEye = 0;
-  maxValue = 0;
-  memset(eyeValues, 0, sizeof(eyeValues));
+void IR_RxCallback(I2C_HandleTypeDef *hi2c) {
+  /* Delegate to common I2C module callback */
+  I2C_Module_RxCallback(&IR.i2cModule, hi2c);
+}
+
+void IR_ErrorCallback(I2C_HandleTypeDef *hi2c) {
+  /* Delegate to common I2C module callback */
+  I2C_Module_ErrorCallback(&IR.i2cModule, hi2c);
 }
