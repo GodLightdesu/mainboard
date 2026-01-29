@@ -88,7 +88,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Inc # 主程序头文件
     Libraries/Module/IR # 红外传感器头文件
     Libraries/Module/MPU6050 # MPU6050传感器头文件
-    Libraries/Module/MPU6050/MotionDriver.c # DMP驱动头文件
+    Libraries/Module/MPU6050/MotionDriver # DMP驱动头文件
     Libraries/Module/Motors # 电机控制头文件
     Libraries/Uart # UART相关头文件
     Libraries/I2C # I2C相关头文件
