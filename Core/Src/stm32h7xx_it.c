@@ -268,7 +268,7 @@ void I2C3_ER_IRQHandler(void)
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_RxCallback(hi2c);
-  MPU6050_RxCallback(hi2c);
+  // MPU6050_RxCallback(hi2c);
 }
 
 /**
@@ -277,7 +277,7 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_RxCallback(hi2c);
-  MPU6050_RxCallback(hi2c);
+  // MPU6050_RxCallback(hi2c);
 }
 
 /**
@@ -286,7 +286,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_ErrorCallback(hi2c);
-  MPU6050_ErrorCallback(hi2c);
+  // MPU6050_ErrorCallback(hi2c);
 }
 
 /* USER CODE END 1 */

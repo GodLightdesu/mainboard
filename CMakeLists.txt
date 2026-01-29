@@ -42,6 +42,7 @@ add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(cmake/stm32cubemx)
 
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
+
     # Add user defined library search paths
 )
 
@@ -67,10 +68,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/main.c # 主程序入口
     Libraries/I2C/i2c_common.c # I2C通信模块
     Libraries/Uart/data_uart.c # UART数据收发
-    Libraries/Module/mpu6050.c # MPU6050传感器驱动
-    Libraries/Module/mpu6050_dmp.c # MPU6050姿态解算
-    Libraries/Module/motors.c # 电机控制
-    Libraries/Module/ir.c # 红外传感器
+    Libraries/Module/MPU6050/MPU6050.c # MPU6050传感器驱动
+    Libraries/Module/MPU6050/MotionDriver/inv_mpu_dmp_motion_driver.c # DMP驱动
+    Libraries/Module/MPU6050/MotionDriver/inv_mpu.c # MPU核心驱动
+    Libraries/Module/Motors/motors.c # 电机控制
+    Libraries/Module/IR/ir.c # 红外传感器
     Libraries/soccer.c # 主控制逻辑
 
     # CMSIS-DSP 源文件
@@ -84,7 +86,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     # 用户自定义头文件路径
     Core/Inc # 主程序头文件
-    Libraries/Module # 模块头文件
+    Libraries/Module/IR # 红外传感器头文件
+    Libraries/Module/MPU6050 # MPU6050传感器头文件
+    Libraries/Module/MPU6050/MotionDriver.c # DMP驱动头文件
+    Libraries/Module/Motors # 电机控制头文件
     Libraries/Uart # UART相关头文件
     Libraries/I2C # I2C相关头文件
     Libraries/ # 库根目录
@@ -108,11 +113,13 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
     # ==================== 用户调试宏 ====================
     DEBUG_GENERAL # 启用通用调试信息输出
+
     # DEBUG_IR # 启用红外传感器调试信息
 
     # 可选调试宏（按需启用）:
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
-    DEBUG_MPU6050_DMP    # MPU6050姿态（滚转/俯仰/偏航）调试
+    DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
+
     # DEBUG_I2C            # I2C通信错误和状态调试
     # DEBUG_MOTORS         # 电机测试PWM值调试
     # DEBUG_SOCCER         # 足球机器人状态机转换和决策调试
@@ -186,31 +193,33 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 # ============================================================================
 
 # 移除错误的库依赖（处理CMake的隐式链接库问题）
-list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)# 添加项目依赖的库
+list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob) # 添加项目依赖的库
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx # STM32CubeMX生成的库（包含HAL、启动文件等）
     m # 标准数学库（libm）
+
     # Add user defined libraries
 )
+
 # ============================================================================
 # 使用说明
 # ============================================================================
 # 1. 构建命令:
-#    mkdir -p build && cd build
-#    cmake -DCMAKE_BUILD_TYPE=Release ..
-#    make -j4
+# mkdir -p build && cd build
+# cmake -DCMAKE_BUILD_TYPE=Release ..
+# make -j4
 #
 # 2. 调试DSP函数:
-#    - 在main.c中添加: #include "arm_math.h"
-#    - 确保FPU已启用: SCB->CPACR |= (0xF << 20);
-#    - 使用DSP函数: arm_sin_f32(&angle, &result);
+# - 在main.c中添加: #include "arm_math.h"
+# - 确保FPU已启用: SCB->CPACR |= (0xF << 20);
+# - 使用DSP函数: arm_sin_f32(&angle, &result);
 #
 # 3. 验证构建:
-#    arm-none-eabi-size mainboard.elf   # 查看代码大小
-#    arm-none-eabi-nm mainboard.elf | grep arm_sin # 验证DSP符号
+# arm-none-eabi-size mainboard.elf   # 查看代码大小
+# arm-none-eabi-nm mainboard.elf | grep arm_sin # 验证DSP符号
 #
 # 4. 常见问题:
-#    - FPU宏重复定义: 删除 __FPU_PRESENT 和 __FPU_USED 定义
-#    - 链接脚本重复: 确保只在 cmake/stm32cubemx 中定义一次
-#    - nano.specs冲突: 不要使用 -specs=nano.specs
+# - FPU宏重复定义: 删除 __FPU_PRESENT 和 __FPU_USED 定义
+# - 链接脚本重复: 确保只在 cmake/stm32cubemx 中定义一次
+# - nano.specs冲突: 不要使用 -specs=nano.specs
 # ============================================================================

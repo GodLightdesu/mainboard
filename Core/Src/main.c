@@ -29,11 +29,11 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "string.h"
-#include "ir.h"
 #include "const.h"
 #include "data_uart.h"
-#include "mpu6050.h"
-#include "mpu6050_dmp.h"
+
+#include "ir.h"
+#include "MPU6050.h"
 #include "motors.h"
 #include "soccer.h"
 /* USER CODE END Includes */
@@ -145,25 +145,16 @@ int main(void)
 
   uint16_t addr = 0x68;     // mpu6050
   I2C_Find(&huart4, &hi2c3, addr);
-  MPU6050_init(&hi2c3);
-  MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
   
   Mtrs_Init();
 
   /* Cache module data pointers for efficiency */
   static const IR_t* irDataPtr;
-  static const MPU6050_t* mpuDataPtr;
-  static const MPU6050_DMP_t* dmpDataPtr;
-  
   irDataPtr = IR_GetData();
-  mpuDataPtr = MPU6050_GetData();
-  dmpDataPtr = MPU6050_DMP_GetData();
 
   /* Create module data struct once */
   static ModuleData_t moduleData;
   moduleData.irData = irDataPtr;
-  moduleData.mpuData = mpuDataPtr;
-  moduleData.dmpData = dmpDataPtr;
 
   /* Initialize timing variables */
   uint32_t lastLedToggleTime = HAL_GetTick();
