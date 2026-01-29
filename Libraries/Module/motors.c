@@ -156,15 +156,15 @@ void polarMove(float angle_deg, uint8_t speed_percent) {
   }
   
   /* Convert angle to radians */
-  const float angle_rad = angle_deg * (M_PI / 180.0f);
-  const float phase_offset = M_PI / 4.0f;  /* 45 degrees for mecanum wheels */
+  const float angle_rad = angle_deg * (PI / 180.0f);
+  const float phase_offset = PI / 4.0f;  /* 45 degrees for mecanum wheels */
 
   /* Calculate with deadzone and rounding */
   const float DEADZONE = 0.5f; /* Smaller deadzone since we're rounding */
 
   /* Calculate motor speeds using mecanum kinematics */
-  float calcA = speed_percent * sinf(angle_rad + phase_offset);
-  float calcB = speed_percent * sinf(angle_rad - phase_offset);
+  float calcA = speed_percent * arm_sin_f32(angle_rad + phase_offset);
+  float calcB = speed_percent * arm_sin_f32(angle_rad - phase_offset);
   
   /* Apply deadzone and rounding */
   int spdA = (fabsf(calcA) < DEADZONE) ? 0 : (int)roundf(calcA);

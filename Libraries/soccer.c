@@ -1,6 +1,4 @@
 #include "soccer.h"
-#include "mpu6050.h"
-#include "motors.h"
 
 static State_t state;
 

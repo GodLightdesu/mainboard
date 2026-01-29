@@ -17,8 +17,12 @@ static void ComplementaryFilter(void) {
   
   if (!initialized) {
     // Initialize from accelerometer
-    float roll = atan2f(mpu->ay, mpu->az) * 180.0f / M_PI;
-    float pitch = atan2f(-mpu->ax, sqrtf(mpu->ay*mpu->ay + mpu->az*mpu->az)) * 180.0f / M_PI;
+    float roll, mag, pitch;
+    arm_atan2_f32(mpu->ay, mpu->az, &roll);
+    roll *= 180.0f / PI;
+    arm_sqrt_f32(mpu->ay*mpu->ay + mpu->az*mpu->az, &mag);
+    arm_atan2_f32(-mpu->ax, mag, &pitch);
+    pitch *= 180.0f / PI;
     
     MPU6050_DMP.euler.roll = roll;
     MPU6050_DMP.euler.pitch = pitch;
@@ -50,8 +54,12 @@ static void ComplementaryFilter(void) {
   float gyroYaw = MPU6050_DMP.euler.yaw + gz_calibrated * dt;
   
   // Accelerometer angles
-  float accelRoll = atan2f(mpu->ay, mpu->az) * 180.0f / M_PI;
-  float accelPitch = atan2f(-mpu->ax, sqrtf(mpu->ay*mpu->ay + mpu->az*mpu->az)) * 180.0f / M_PI;
+  float accelRoll, mag, accelPitch;
+  arm_atan2_f32(mpu->ay, mpu->az, &accelRoll);
+  accelRoll *= 180.0f / PI;
+  arm_sqrt_f32(mpu->ay*mpu->ay + mpu->az*mpu->az, &mag);
+  arm_atan2_f32(-mpu->ax, mag, &accelPitch);
+  accelPitch *= 180.0f / PI;
   
   // Complementary filter (98% gyro, 2% accel)
   const float alpha = COMPLEMENTARY_FILTER_ALPHA;
@@ -64,12 +72,12 @@ static void ComplementaryFilter(void) {
   while (MPU6050_DMP.euler.yaw < -180.0f) MPU6050_DMP.euler.yaw += 360.0f;
   
   // Convert Euler to Quaternion
-  float cy = cosf(MPU6050_DMP.euler.yaw * M_PI / 360.0f);
-  float sy = sinf(MPU6050_DMP.euler.yaw * M_PI / 360.0f);
-  float cp = cosf(MPU6050_DMP.euler.pitch * M_PI / 360.0f);
-  float sp = sinf(MPU6050_DMP.euler.pitch * M_PI / 360.0f);
-  float cr = cosf(MPU6050_DMP.euler.roll * M_PI / 360.0f);
-  float sr = sinf(MPU6050_DMP.euler.roll * M_PI / 360.0f);
+  float cy = arm_cos_f32(MPU6050_DMP.euler.yaw * PI / 360.0f);
+  float sy = arm_sin_f32(MPU6050_DMP.euler.yaw * PI / 360.0f);
+  float cp = arm_cos_f32(MPU6050_DMP.euler.pitch * PI / 360.0f);
+  float sp = arm_sin_f32(MPU6050_DMP.euler.pitch * PI / 360.0f);
+  float cr = arm_cos_f32(MPU6050_DMP.euler.roll * PI / 360.0f);
+  float sr = arm_sin_f32(MPU6050_DMP.euler.roll * PI / 360.0f);
   
   MPU6050_DMP.quaternion.w = cr * cp * cy + sr * sp * sy;
   MPU6050_DMP.quaternion.x = sr * cp * cy - cr * sp * sy;
@@ -163,12 +171,12 @@ void MPU6050_DMP_ResetYaw(void) {
   MPU6050_DMP.euler.yaw = 0.0f;
   
   // Recalculate quaternion with zero yaw
-  float cy = cosf(0.0f);
-  float sy = sinf(0.0f);
-  float cp = cosf(pitch * M_PI / 360.0f);
-  float sp = sinf(pitch * M_PI / 360.0f);
-  float cr = cosf(roll * M_PI / 360.0f);
-  float sr = sinf(roll * M_PI / 360.0f);
+  float cy = arm_cos_f32(0.0f);
+  float sy = arm_sin_f32(0.0f);
+  float cp = arm_cos_f32(pitch * PI / 360.0f);
+  float sp = arm_sin_f32(pitch * PI / 360.0f);
+  float cr = arm_cos_f32(roll * PI / 360.0f);
+  float sr = arm_sin_f32(roll * PI / 360.0f);
   
   MPU6050_DMP.quaternion.w = cr * cp * cy + sr * sp * sy;
   MPU6050_DMP.quaternion.x = sr * cp * cy - cr * sp * sy;
@@ -207,19 +215,21 @@ void MPU6050_QuaternionToEuler(const Quaternion_t *quat, EulerAngles_t *euler) {
   // Roll (x-axis rotation)
   float sinr_cosp = 2.0f * (quat->w * quat->x + quat->y * quat->z);
   float cosr_cosp = 1.0f - 2.0f * (quat->x * quat->x + quat->y * quat->y);
-  euler->roll = atan2f(sinr_cosp, cosr_cosp) * 180.0f / M_PI;
+  arm_atan2_f32(sinr_cosp, cosr_cosp, &euler->roll);
+  euler->roll *= 180.0f / PI;
   
   // Pitch (y-axis rotation)
   float sinp = 2.0f * (quat->w * quat->y - quat->z * quat->x);
   if (fabsf(sinp) >= 1.0f)
     euler->pitch = copysignf(90.0f, sinp);  // Use 90 degrees if out of range
   else
-    euler->pitch = asinf(sinp) * 180.0f / M_PI;
+    euler->pitch = asinf(sinp) * 180.0f / PI;
   
   // Yaw (z-axis rotation)
   float siny_cosp = 2.0f * (quat->w * quat->z + quat->x * quat->y);
   float cosy_cosp = 1.0f - 2.0f * (quat->y * quat->y + quat->z * quat->z);
-  euler->yaw = atan2f(siny_cosp, cosy_cosp) * 180.0f / M_PI;
+  arm_atan2_f32(siny_cosp, cosy_cosp, &euler->yaw);
+  euler->yaw *= 180.0f / PI;
 }
 
 const MPU6050_DMP_t* MPU6050_DMP_GetData(void) {

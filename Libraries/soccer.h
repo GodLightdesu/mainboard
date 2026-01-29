@@ -2,10 +2,11 @@
 #define SOCCER
 
 #include "ir.h"
+#include "motors.h"
 #include "mpu6050.h"
 #include "mpu6050_dmp.h"
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /* Soccer control constants */
 #define YAW_CORRECTION_THRESHOLD 10.0f  /**< Yaw angle threshold for compass correction (degrees) */

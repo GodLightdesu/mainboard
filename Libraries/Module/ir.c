@@ -169,10 +169,10 @@ float IR_CalBallAngle(void) {
     // 僅使用超過閾值的感測器
     if (value > IR_DETECTION_THRESHOLD) {
       float weight = (float)value;
-      float rad = EYE_ANGLES[eye] * (M_PI / 180.0f);
+      float rad = EYE_ANGLES[eye] * (PI / 180.0f);
       
-      sumX += weight * cosf(rad);
-      sumY += weight * sinf(rad);
+      sumX += weight * arm_cos_f32(rad);
+      sumY += weight * arm_sin_f32(rad);
       sumWeight += weight;
     }
   }
@@ -181,7 +181,9 @@ float IR_CalBallAngle(void) {
   if (sumWeight == 0.0f) { return -1.0f; }
   
   // 使用 atan2 計算加權方向
-  float angle = atan2f(sumY, sumX) * (180.0f / M_PI);
+  float angle;
+  arm_atan2_f32(sumY, sumX, &angle);
+  angle *= (180.0f / PI);
   
   angle -= 90.0f;          // 調整為 0° 在前方
   angle = 360.0f - angle;  // 改為順時針方向

@@ -12,18 +12,19 @@
 #define IR_DETECTION_THRESHOLD 100  /**< Minimum signal strength to consider ball detected */
 
 /* Mathematical constants */
-#ifndef M_PI
-#define M_PI 3.14159265358979323846f
+#ifndef PI
+#define PI 3.14159265358979323846f
 #endif
 
 /* I2C slave addresses */
 #define IR_SLAVE_1_ADDR (0x30 << 1)
 #define IR_SLAVE_2_ADDR (0x31 << 1)
 
+
 #include "i2c_common.h"
+#include "arm_math.h"
 #include "const.h"
 #include "usart.h"
-#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>

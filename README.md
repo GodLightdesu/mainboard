@@ -2,7 +2,16 @@
 
 這是一個基於 STM32H750 微控制器的主控板韌體專案，用於控制多馬達機器人系統並整合 IR 感測器陣列。
 
-## 🎉 最新更新 (v2.4.0 - 2026-01-29)
+## 🎉 最新更新 (v2.5.0 - 2026-01-29)
+
+### 🚀 ARM CMSIS DSP 效能優化
+- **硬體加速數學運算**：全面整合 ARM CMSIS DSP 函數庫
+  - 正弦/餘弦函數：`sinf()` → `arm_sin_f32()` / `cosf()` → `arm_cos_f32()`
+  - 平方根運算：`sqrtf()` → `arm_sqrt_f32()`
+  - 反正切函數：`atan2f()` → `arm_atan2_f32()`
+  - 常數標準化：`M_PI` → `PI` (DSP 定義)
+- **優化模組**：MPU6050 姿態估計、IR 角度計算、馬達運動學
+- **效能提升**：利用 STM32H7 Cortex-M7 FPU 和 DSP 指令集
 
 ### 🤖 足球機器人基礎控制邏輯
 - **基礎控制實現**：基於 IR 和 MPU6050 數據的簡單決策邏輯
@@ -200,6 +209,10 @@ mainboard/
 │
 ├── Drivers/                   # STM32 HAL 驅動程式
 │   ├── CMSIS/                 # ARM CMSIS 標頭檔
+│   ├── Dsp/                   # 🆕 ARM CMSIS DSP 函數庫
+│   │   ├── Include/           # DSP 標頭檔 (arm_math.h)
+│   │   ├── Source/            # DSP 實作 (FastMath, BasicMath, etc.)
+│   │   └── PrivateInclude/    # 內部 DSP 標頭檔
 │   └── STM32H7xx_HAL_Driver/  # STM32H7 HAL 函式庫
 │
 ├── Doc/                       # 📚 文檔
