@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-
 #include "MPU6050.h"
+#include "MPU6050_DMP.h"
 #include "ir.h"
 
 void dataUart_Init(UART_HandleTypeDef *huart);
@@ -18,8 +18,8 @@ void dataUart_SendString(const char *str);
 void dataUart_PrintInitMessage(const char *moduleName);
 
 // MPU6050 debug functions
-// void dataUart_PrintMPU6050Data(const MPU6050_t* mpuData);
-// void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData);
+void dataUart_PrintMPU6050Data(const MPU6050_t* mpuData);
+void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData);
 
 // IR debug functions
 HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size);

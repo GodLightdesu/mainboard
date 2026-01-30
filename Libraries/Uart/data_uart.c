@@ -28,37 +28,37 @@ void dataUart_PrintInitMessage(const char *moduleName) {
 }
 
 // MPU6050 debug functions
-// void dataUart_PrintMPU6050Data(const MPU6050_t *mpuData) {
-// #ifdef DEBUG_MPU6050
-//   if (dataUart_huart == NULL || mpuData == NULL) return;
+void dataUart_PrintMPU6050Data(const MPU6050_t *mpuData) {
+#ifdef DEBUG_MPU6050
+  if (dataUart_huart == NULL || mpuData == NULL) return;
   
-//   char outputStr[100];
-//   int len = snprintf(outputStr, sizeof(outputStr), 
-//                      "Acc: [%.2f, %.2f, %.2f] Gyro: [%.2f, %.2f, %.2f] Temp: %.2f\r\n",
-//                      mpuData->ax, mpuData->ay, mpuData->az,
-//                      mpuData->gx, mpuData->gy, mpuData->gz,
-//                      mpuData->temperature);
-//   if (len > 0 && len < (int)sizeof(outputStr)) {
-//     HAL_UART_Transmit(dataUart_huart, (uint8_t*)outputStr, len, 100);
-//   }
-// #endif
-// }
+  char outputStr[100];
+  int len = snprintf(outputStr, sizeof(outputStr), 
+                     "Acc: [%.2f, %.2f, %.2f] Gyro: [%.2f, %.2f, %.2f] Temp: %.2f\r\n",
+                     mpuData->ax, mpuData->ay, mpuData->az,
+                     mpuData->gx, mpuData->gy, mpuData->gz,
+                     mpuData->temperature);
+  if (len > 0 && len < (int)sizeof(outputStr)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)outputStr, len, 100);
+  }
+#endif
+}
 
-// void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData) {
-// #ifdef DEBUG_MPU6050_DMP
-//   if (dataUart_huart == NULL || dmpData == NULL) return;
+void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData) {
+#ifdef DEBUG_MPU6050_DMP
+  if (dataUart_huart == NULL || dmpData == NULL) return;
   
-//   char outputStr[100];
-//   int len = snprintf(outputStr, sizeof(outputStr), 
-//                      "Quat: [%.3f, %.3f, %.3f, %.3f] Euler: [%.2f, %.2f, %.2f]\r\n",
-//                      dmpData->quaternion.w, dmpData->quaternion.x,
-//                      dmpData->quaternion.y, dmpData->quaternion.z,
-//                      dmpData->euler.roll, dmpData->euler.pitch, dmpData->euler.yaw);
-//   if (len > 0 && len < (int)sizeof(outputStr)) {
-//     HAL_UART_Transmit(dataUart_huart, (uint8_t*)outputStr, len, 100);
-//   }
-// #endif
-// }
+  char outputStr[100];
+  int len = snprintf(outputStr, sizeof(outputStr), 
+                     "Quat: [%.3f, %.3f, %.3f, %.3f] Euler: [%.2f, %.2f, %.2f]\r\n",
+                     dmpData->quaternion.w, dmpData->quaternion.x,
+                     dmpData->quaternion.y, dmpData->quaternion.z,
+                     dmpData->euler.roll, dmpData->euler.pitch, dmpData->euler.yaw);
+  if (len > 0 && len < (int)sizeof(outputStr)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)outputStr, len, 100);
+  }
+#endif
+}
 
 // IR debug functions
 HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size) {

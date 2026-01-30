@@ -4,6 +4,7 @@
 #include "ir.h"
 #include "motors.h"
 #include "MPU6050.h"
+#include "MPU6050_DMP.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -26,8 +27,8 @@ typedef enum {
  */
 typedef struct {
   const IR_t* irData;
-  // const MPU6050_t* mpuData;
-  // const MPU6050_DMP_t* dmpData;
+  const MPU6050_t* mpuData;
+  const MPU6050_DMP_t* dmpData;
   // Add new module pointers here as needed
 } ModuleData_t;
 

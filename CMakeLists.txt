@@ -69,8 +69,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/I2C/i2c_common.c # I2C通信模块
     Libraries/Uart/data_uart.c # UART数据收发
     Libraries/Module/MPU6050/MPU6050.c # MPU6050传感器驱动
-    Libraries/Module/MPU6050/MotionDriver/inv_mpu_dmp_motion_driver.c # DMP驱动
-    Libraries/Module/MPU6050/MotionDriver/inv_mpu.c # MPU核心驱动
+    Libraries/Module/MPU6050/MPU6050_DMP.c # MPU6050 DMP功能
+    # Libraries/Module/MPU6050/MotionDriver/inv_mpu_dmp_motion_driver.c # DMP驱动
+    # Libraries/Module/MPU6050/MotionDriver/inv_mpu.c # MPU核心驱动
     Libraries/Module/Motors/motors.c # 电机控制
     Libraries/Module/IR/ir.c # 红外传感器
     Libraries/soccer.c # 主控制逻辑
