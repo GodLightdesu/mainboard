@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "button.h"
 #include "dma.h"
 #include "i2c.h"
 #include "tim.h"
@@ -36,6 +37,8 @@
 #include "MPU6050.h"
 #include "MPU6050_DMP.h"
 #include "motors.h"
+
+#include "button.h"
 #include "soccer.h"
 /* USER CODE END Includes */
 
@@ -163,7 +166,21 @@ int main(void)
   moduleData.mpuData = mpuDataPtr;
   moduleData.dmpData = mpuDmpDataPtr;
 
+  // Button
+  Button_Init();
+  // 重命名按钮（可选）
+  #ifdef DEBUG_BUTTON
+  Button_SetButtonName(0, "START_BTN");
+  Button_SetButtonName(1, "STOP_BTN");
+  #endif
+  HAL_TIM_Base_Start_IT(&htim7);
+
+  // Motors
   Mtrs_Init();
+
+  // 等待系统启动（长按按钮1）
+  SoccerInit();
+  Soccer_WaitForStart();
 
   /* Initialize timing variables */
   uint32_t lastLedToggleTime = HAL_GetTick();

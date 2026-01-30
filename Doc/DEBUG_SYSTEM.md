@@ -57,7 +57,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 | `DEBUG_IR` | IR 感測器 | • 眼睛數據 (Eye/Val)<br>• 所有感測器數值 |
 | `DEBUG_I2C` | I2C 通信 | • I2C 錯誤碼和從機 ID<br>• 超時警告<br>• RX 回調計數<br>• 設備發現消息<br>• 原始十六進制數據 |
 | `DEBUG_MOTORS` | 馬達控制 | • 馬達測試標題<br>• PWM 值和占空比<br>• 測試字符串 |
-| `DEBUG_SOCCER` | 足球狀態機 | • 狀態轉換 (IDLE/SEARCH/CHASE/ALIGN/OUT_OF_BOUNDS)<br>• 足球角度和距離<br>• 當前偏航角 |
+| `DEBUG_BUTTON` | 按鍵控制 | • 按鍵事件 (CLICK/DOUBLE_CLICK/LONG_PRESS)<br>• 狀態轉換 (IDLE/PRESSED/WAIT_DOUBLE)<br>• 原始狀態變化<br>• 按鍵初始化訊息 |
 
 ## data_uart 模塊
 
@@ -85,6 +85,10 @@ void dataUart_PrintMotorTest(int motorId);
 
 // 足球調試打印
 void dataUart_PrintSoccerState(const char *stateName, float ballAngle, float ballDistance, float yawAngle);
+
+// 按鍵調試打印
+void dataUart_PrintButtonEvent(uint8_t btnIndex, const char *buttonName, const char *eventName);
+void dataUart_PrintButtonState(uint8_t btnIndex, const char *buttonName, const char *stateName);
 
 // 通用調試打印
 void dataUart_PrintInitMessage(const char *moduleName);
@@ -190,6 +194,21 @@ I2C_Read FAIL: Code=1, HAL_state=32
 === Testing Motor 0 ===
 PWM: 400 (40.0%)
 PWM: 420 (42.0%)
+```
+
+### 按鍵事件
+```
+[START_BTN] Event: CLICK
+[STOP_BTN] Event: DOUBLE_CLICK
+[START_BTN] Event: LONG_PRESS_START
+[START_BTN] Event: LONG_PRESS_END
+```
+
+### 按鍵狀態
+```
+[START_BTN] State: PRESSED
+[STOP_BTN] State: WAIT_DOUBLE
+[START_BTN] State: IDLE
 ```
 
 ## 在模塊中使用

@@ -52,11 +52,11 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # 仅包含需要的快速数学函数源文件，以减小代码体积
 set(CMSIS_DSP_SOURCES
-    Libraries/Dsp/Source/FastMathFunctions/arm_sin_f32.c   # 正弦函数
-    Libraries/Dsp/Source/FastMathFunctions/arm_cos_f32.c   # 余弦函数
+    Libraries/Dsp/Source/FastMathFunctions/arm_sin_f32.c # 正弦函数
+    Libraries/Dsp/Source/FastMathFunctions/arm_cos_f32.c # 余弦函数
     Libraries/Dsp/Source/FastMathFunctions/arm_atan2_f32.c # 反正切函数
-    Libraries/Dsp/Source/CommonTables/arm_common_tables.c  # 公共查找表
-    Libraries/Dsp/Source/CommonTables/arm_const_structs.c  # 常量结构体
+    Libraries/Dsp/Source/CommonTables/arm_common_tables.c # 公共查找表
+    Libraries/Dsp/Source/CommonTables/arm_const_structs.c # 常量结构体
 )
 
 # ============================================================================
@@ -68,8 +68,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/main.c # 主程序入口
     Libraries/I2C/i2c_common.c # I2C通信模块
     Libraries/Uart/data_uart.c # UART数据收发
+    Libraries/Button/button.c # 按键处理模块
     Libraries/Module/MPU6050/MPU6050.c # MPU6050传感器驱动
     Libraries/Module/MPU6050/MPU6050_DMP.c # MPU6050 DMP功能
+
     # Libraries/Module/MPU6050/MotionDriver/inv_mpu_dmp_motion_driver.c # DMP驱动
     # Libraries/Module/MPU6050/MotionDriver/inv_mpu.c # MPU核心驱动
     Libraries/Module/Motors/motors.c # 电机控制
@@ -87,6 +89,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     # 用户自定义头文件路径
     Core/Inc # 主程序头文件
+    Libraries/Button # 按键模块头文件
     Libraries/Module/IR # 红外传感器头文件
     Libraries/Module/MPU6050 # MPU6050传感器头文件
     Libraries/Module/MPU6050/MotionDriver # DMP驱动头文件
@@ -114,6 +117,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
     # ==================== 用户调试宏 ====================
     DEBUG_GENERAL # 启用通用调试信息输出
+    DEBUG_BUTTON # 启用按键调试信息输出
 
     # DEBUG_IR # 启用红外传感器调试信息
 

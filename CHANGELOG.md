@@ -1,5 +1,63 @@
 # 更新日誌
 
+## [2.6.0] - 2026-01-30
+
+### 🎮 按鍵控制模組新增
+
+#### 完整的按鍵狀態機
+- **狀態機設計**：實現完整的按鍵狀態機，支持消抖、單擊、雙擊、長按等功能
+  - `BTN_STATE_IDLE`: 空閒狀態
+  - `BTN_STATE_DEBOUNCE_PRESS`: 按下消抖
+  - `BTN_STATE_PRESSED`: 已按下
+  - `BTN_STATE_WAIT_RELEASE`: 等待釋放
+  - `BTN_STATE_WAIT_DOUBLE`: 等待雙擊
+  - `BTN_STATE_LONG_PRESS`: 長按
+  - `BTN_STATE_RELEASE_DEBOUNCE`: 釋放消抖
+
+#### 按鍵事件支持
+- **事件類型**：支持多種按鍵事件
+  - `BTN_EVENT_CLICK`: 單擊（用於一般控制）
+  - `BTN_EVENT_DOUBLE_CLICK`: 雙擊（用於緊急停止）
+  - `BTN_EVENT_LONG_PRESS_START`: 長按開始（用於啟動）
+  - `BTN_EVENT_LONG_PRESS_HOLD`: 長按保持
+  - `BTN_EVENT_LONG_PRESS_END`: 長按結束
+
+#### 硬體抽象層
+- **GPIO 配置**：支持最多 8 個按鍵，配置在 GPIOD 和 GPIOC
+  - Button 1 (GPIOD): 啟動按鈕
+  - Button 2 (GPIOD): 緊急停止按鈕
+  - Button 3-8: 擴展按鈕
+
+#### 系統控制整合
+- **回調機制**：提供系統控制回調函數 `SystemControlCallback_t`
+  - 足球機器人控制系統已整合按鍵控制
+  - Button 1: 啟動足球機器人
+  - Button 2: 緊急停止
+
+#### 調試系統整合
+- **DEBUG_BUTTON 宏**：完整的按鍵調試支持
+  - 按鍵事件和狀態變化日誌
+  - 原始和穩定狀態監控
+  - 按鍵初始化和命名
+
+#### API 介面
+- **初始化函數**：`Button_Init()` 初始化所有按鍵
+- **掃描函數**：`Button_Scan()` 定期掃描按鍵狀態（10ms 間隔）
+- **事件查詢**：`Button_GetEvent()` 獲取按鍵事件
+- **狀態查詢**：`Button_GetState()` 和 `Button_IsPressed()` 查詢按鍵狀態
+- **回調設置**：`Button_SetSystemControlCallback()` 設置系統控制回調
+
+#### 定時器整合
+- **TIM7 中斷**：按鍵掃描整合到 TIM7 定時器中斷
+  - 10ms 掃描間隔
+  - 與現有系統定時器兼容
+
+#### 記憶體使用
+- **Flash 使用**：約 3KB（包含調試功能）
+- **RAM 使用**：約 1KB（8 個按鍵狀態結構）
+
+---
+
 ## [2.5.0] - 2026-01-29
 
 ### 🚀 ARM CMSIS DSP 效能優化

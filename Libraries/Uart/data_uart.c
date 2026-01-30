@@ -238,3 +238,28 @@ void dataUart_PrintSoccerState(const char *stateName, float ballAngle, float bal
   }
 #endif
 }
+
+// Button debug functions
+void dataUart_PrintButtonEvent(uint8_t btnIndex, const char *buttonName, const char *eventName) {
+#ifdef DEBUG_BUTTON
+  if (dataUart_huart == NULL || buttonName == NULL || eventName == NULL) return;
+  
+  char msg[64];
+  int len = snprintf(msg, sizeof(msg), "[%s] Event: %s\r\n", buttonName, eventName);
+  if (len > 0 && len < (int)sizeof(msg)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)msg, len, 100);
+  }
+#endif
+}
+
+void dataUart_PrintButtonState(uint8_t btnIndex, const char *buttonName, const char *stateName) {
+#ifdef DEBUG_BUTTON
+  if (dataUart_huart == NULL || buttonName == NULL || stateName == NULL) return;
+  
+  char msg[64];
+  int len = snprintf(msg, sizeof(msg), "[%s] State: %s\r\n", buttonName, stateName);
+  if (len > 0 && len < (int)sizeof(msg)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)msg, len, 100);
+  }
+#endif
+}

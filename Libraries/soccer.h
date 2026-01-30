@@ -2,6 +2,8 @@
 #define SOCCER
 
 #include "ir.h"
+#include "button.h"
+#include "data_uart.h"
 #include "motors.h"
 #include "MPU6050.h"
 #include "MPU6050_DMP.h"
@@ -32,13 +34,17 @@ typedef struct {
   // Add new module pointers here as needed
 } ModuleData_t;
 
+void SoccerInit(void);
 void updateData();
+void soccer_ProcessData(const ModuleData_t *data);
+
 State_t getState();
 
-/**
- * @brief Process sensor data and update robot state machine
- * @param data Pointer to structure containing all module data
- */
-void soccer_ProcessData(const ModuleData_t* data);
+void Soccer_WaitForStart(void);
+void Soccer_StartSystem(void);
+void Soccer_EmergencyStop(void);
+void Soccer_ResetEmergencyStop(void);
+bool Soccer_IsSystemStarted(void);
+bool Soccer_IsEmergencyStop(void);
 
 #endif

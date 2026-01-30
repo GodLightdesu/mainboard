@@ -10,6 +10,7 @@
 #include "MPU6050.h"
 #include "MPU6050_DMP.h"
 #include "ir.h"
+#include "button.h"
 
 void dataUart_Init(UART_HandleTypeDef *huart);
 void dataUart_SendString(const char *str);
@@ -37,5 +38,9 @@ void dataUart_PrintDeviceFound(uint16_t addr);
 
 // Soccer debug functions
 void dataUart_PrintSoccerState(const char *stateName, float ballAngle, float ballDistance, float yawAngle);
+
+// Button debug functions
+void dataUart_PrintButtonEvent(uint8_t btnIndex, const char *buttonName, const char *eventName);
+void dataUart_PrintButtonState(uint8_t btnIndex, const char *buttonName, const char *stateName);
 
 #endif // DATA_UART_H
