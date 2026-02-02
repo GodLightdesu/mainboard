@@ -262,9 +262,16 @@ void I2C_Module_Process(I2C_Module_t *module) {
   case I2C_STATE_ERROR:
     /* Recovery from error state (overflow-safe) */
     if (TIME_DIFF(currentTime, module->stateStartTime) > I2C_ERROR_RECOVERY_MS) {
-      /* Always reset I2C for clean recovery */
-      HAL_I2C_DeInit(module->hi2c);
-      HAL_I2C_Init(module->hi2c);
+      /* Lightweight recovery: just clear the error state without full re-init */
+      if (module->hi2c != NULL) {
+        /* Clear error code */
+        module->hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
+        
+        /* Force HAL state back to ready if stuck */
+        if (module->hi2c->State != HAL_I2C_STATE_READY) {
+          module->hi2c->State = HAL_I2C_STATE_READY;
+        }
+      }
       
       __disable_irq();
       module->state = I2C_STATE_IDLE;
@@ -276,6 +283,10 @@ void I2C_Module_Process(I2C_Module_t *module) {
       if (busManager != NULL) {
         I2C_Bus_Release(busManager, module);
       }
+      
+      #ifdef I2C_COMMON_DEBUG
+      dataUart_PrintI2CStatus("I2C Error Cleared");
+      #endif
     }
     break;
   }

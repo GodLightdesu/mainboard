@@ -27,6 +27,18 @@ void dataUart_PrintInitMessage(const char *moduleName) {
 #endif
 }
 
+void dataUart_PrintInitError(const char *errorMsg, int statusCode) {
+#if defined(DEBUG_MPU6050) || defined(DEBUG_MPU6050_DMP) || defined(DEBUG_IR) || defined(DEBUG_I2C) || defined(DEBUG_MOTORS)
+  if (dataUart_huart == NULL || errorMsg == NULL) return;
+  
+  char msg[80];
+  int len = snprintf(msg, sizeof(msg), "INIT ERROR: %s (Status=0x%X)\r\n", errorMsg, statusCode);
+  if (len > 0 && len < (int)sizeof(msg)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)msg, len, 100);
+  }
+#endif
+}
+
 // MPU6050 debug functions
 void dataUart_PrintMPU6050Data(const MPU6050_t *mpuData) {
 #ifdef DEBUG_MPU6050

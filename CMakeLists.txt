@@ -123,9 +123,9 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
     # 可选调试宏（按需启用）:
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
-    DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
+    # DEBUG_MPU6050_DMP    # MPU6050姿态（滚转/俯仰/偏航）调试
 
-    # DEBUG_I2C            # I2C通信错误和状态调试
+    DEBUG_I2C            # I2C通信错误和状态调试
     # DEBUG_MOTORS         # 电机测试PWM值调试
     # DEBUG_SOCCER         # 足球机器人状态机转换和决策调试
 

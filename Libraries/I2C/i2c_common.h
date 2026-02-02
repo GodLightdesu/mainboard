@@ -11,7 +11,7 @@
 #define I2C_COMMON_DEBUG
 
 /* I2C timeout in milliseconds */
-#define I2C_TIMEOUT_MS 200
+#define I2C_TIMEOUT_MS 300
 #define I2C_ERROR_RECOVERY_MS 200  /* Increased for better bus recovery */
 
 /* Overflow-safe time difference calculation (handles 32-bit tick wraparound) */

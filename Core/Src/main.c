@@ -141,16 +141,22 @@ int main(void)
 
   /* Initialize IR sensor module with I2C peripheral */
   IR_Init(&hi2c3);
-  // Disable IR module for testing
+  // Optional: Disable IR module for testing
   // IR_SetSlaveEnabled(IR_SLAVE_1, false);
   // IR_SetSlaveEnabled(IR_SLAVE_2, false);
+  
+  /* Check for I2C devices before initializing (optional debugging) */
   // I2C_Find(&huart4, &hi2c3, IR_GetSlaveAddress(IR_SLAVE_1));
   // I2C_Find(&huart4, &hi2c3, IR_GetSlaveAddress(IR_SLAVE_2));
-
+  
+  /* Initialize MPU6050 with error handling */
   uint16_t addr = 0x68;     // mpu6050
-  I2C_Find(&huart4, &hi2c3, addr);
-  MPU6050_init(&hi2c3);
-  MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
+  if (I2C_Find(&huart4, &hi2c3, addr)) {
+    MPU6050_init(&hi2c3);
+    MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
+  } else {
+    dataUart_PrintInitError("MPU6050 not found", 0);
+  }
 
   /* Cache module data pointers for efficiency */
   static const IR_t *irDataPtr;

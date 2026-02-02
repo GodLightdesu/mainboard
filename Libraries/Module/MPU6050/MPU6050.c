@@ -55,32 +55,53 @@ void MPU6050_init(I2C_HandleTypeDef *hi2c) {
   
   /* Hardware initialization - configure MPU6050 registers */
   uint8_t config_data;
+  HAL_StatusTypeDef status;
   
   /* 1. Reset MPU6050 (set DEVICE_RESET bit) */
   config_data = 0x80;
-  HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_PWR_MGMT_1, 
+  status = HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_PWR_MGMT_1, 
                     I2C_MEMADD_SIZE_8BIT, &config_data, 1, 100);
+  if (status != HAL_OK) {
+    dataUart_PrintInitError("MPU6050 Reset FAIL", status);
+    return;  // Abort initialization if device not responding
+  }
   HAL_Delay(100);  // Wait for reset to complete
   
   /* 2. Wake up MPU6050 (PWR_MGMT_1 register, clear sleep bit) */
   config_data = 0x00;
-  HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_PWR_MGMT_1, 
+  status = HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_PWR_MGMT_1, 
                     I2C_MEMADD_SIZE_8BIT, &config_data, 1, 100);
+  if (status != HAL_OK) {
+    dataUart_PrintInitError("MPU6050 Wake FAIL", status);
+    return;
+  }
   
   /* 3. Configure Gyroscope full scale range (±1000°/s) */
   config_data = MPU6050_GYRO_FS_1000;
-  HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_GYRO_CONFIG, 
+  status = HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_GYRO_CONFIG, 
                     I2C_MEMADD_SIZE_8BIT, &config_data, 1, 100);
+  if (status != HAL_OK) {
+    dataUart_PrintInitError("MPU6050 Gyro Config FAIL", status);
+    return;
+  }
   
   /* 4. Configure Accelerometer full scale range (±4g) */
   config_data = MPU6050_ACCEL_FS_4G;
-  HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_ACCEL_CONFIG, 
+  status = HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_ACCEL_CONFIG, 
                     I2C_MEMADD_SIZE_8BIT, &config_data, 1, 100);
+  if (status != HAL_OK) {
+    dataUart_PrintInitError("MPU6050 Accel Config FAIL", status);
+    return;
+  }
   
   /* 5. Configure low-pass filter (DLPF_CFG = 3, ~44Hz) */
   config_data = MPU6050_DLPF_44HZ;
-  HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_CONFIG, 
+  status = HAL_I2C_Mem_Write(hi2c, MPU6050_SLAVE_ADDR, MPU6050_REG_CONFIG, 
                     I2C_MEMADD_SIZE_8BIT, &config_data, 1, 100);
+  if (status != HAL_OK) {
+    dataUart_PrintInitError("MPU6050 Filter Config FAIL", status);
+    return;
+  }
   
   /* Setup slave device for continuous reading */
   MPU6050.slaves[0].address = MPU6050_SLAVE_ADDR;

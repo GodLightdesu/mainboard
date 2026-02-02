@@ -17,6 +17,7 @@ void dataUart_SendString(const char *str);
 
 /* Debug print functions */
 void dataUart_PrintInitMessage(const char *moduleName);
+void dataUart_PrintInitError(const char *errorMsg, int statusCode);
 
 // MPU6050 debug functions
 void dataUart_PrintMPU6050Data(const MPU6050_t* mpuData);
