@@ -10,7 +10,9 @@
 #include "MPU6050.h"
 #include "MPU6050_DMP.h"
 #include "ir.h"
-#include "button.h"
+// Forward declaration to avoid circular include
+struct Button_t;
+typedef struct Button_t Button_t;
 
 void dataUart_Init(UART_HandleTypeDef *huart);
 void dataUart_SendString(const char *str);

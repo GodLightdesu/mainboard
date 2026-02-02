@@ -51,7 +51,7 @@ typedef struct
 } BtnPin_t;
 
 // Button data structure
-typedef struct {
+typedef struct Button_t {
   BtnPin_t pin;
 
   // state machine
