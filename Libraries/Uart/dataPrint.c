@@ -1,4 +1,4 @@
-#include "data_uart.h"
+#include "dataPrint.h"
 
 static UART_HandleTypeDef *dataUart_huart = NULL;
 
@@ -39,7 +39,11 @@ void dataUart_PrintInitError(const char *errorMsg, int statusCode) {
 #endif
 }
 
-// MPU6050 debug functions
+// MPU6050 debug functions - DEPRECATED (old API)
+// These functions are commented out because we now use the new MPU6050DMP API
+// which doesn't provide the same data structures.
+// If you need debug output for MPU6050, call MPU6050DMP_GetData() directly.
+/*
 void dataUart_PrintMPU6050Data(const MPU6050_t *mpuData) {
 #ifdef DEBUG_MPU6050
   if (dataUart_huart == NULL || mpuData == NULL) return;
@@ -71,6 +75,7 @@ void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData) {
   }
 #endif
 }
+*/
 
 // IR debug functions
 HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size) {

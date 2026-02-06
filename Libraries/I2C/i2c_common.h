@@ -129,7 +129,7 @@ bool I2C_Module_SetSlaveEnabled(I2C_Module_t *module, uint8_t slaveId, bool enab
  */
 bool I2C_Module_IsSlaveEnabled(I2C_Module_t *module, uint8_t slaveId);
 
-bool I2C_Find(UART_HandleTypeDef* huart, I2C_HandleTypeDef *hi2c, uint16_t addr);
+bool I2C_Find(I2C_HandleTypeDef *hi2c, uint16_t addr);
 uint16_t I2C_Scan(I2C_HandleTypeDef *hi2c);
 
 /**

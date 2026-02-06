@@ -1,5 +1,5 @@
 #include "ir.h"
-#include "data_uart.h"
+#include "dataPrint.h"
 
 static IR_t IR = {0};
 
@@ -182,13 +182,12 @@ float IR_CalBallAngle(void) {
   
   // 使用 atan2 計算加權方向
   float angle;
-  arm_atan2_f32(sumY, sumX, &angle);
+  arm_atan2_f32(sumX, sumY, &angle);
   angle *= (180.0f / PI);
-  
-  angle -= 90.0f;          // 調整為 0° 在前方
-  angle = 360.0f - angle;  // 改為順時針方向
-  if (angle < 0) { angle += 360.0f; }
-  if (angle >= 360.0f) { angle -= 360.0f; }
+
+  // map to 0-360°
+  while (angle >= 360.0f) { angle -= 360.0f; }
+  while (angle < 0.0f) { angle += 360.0f; }
   
   return angle;
 }
@@ -239,8 +238,9 @@ float IR_CalBallAngleInterpolated(void) {
   
   angle -= 90.0f;          // 調整為 0° 在前方
   angle = 360.0f - angle;  // 改為順時針方向
-  if (angle < 0.0f) {  angle += 360.0f; }
-  if (angle >= 360.0f) { angle -= 360.0f; }
+
+  while (angle >= 360.0f) { angle -= 360.0f; }
+  while (angle < 0.0f) { angle += 360.0f; }
   
   return angle;
 }

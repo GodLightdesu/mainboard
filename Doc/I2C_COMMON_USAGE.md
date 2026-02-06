@@ -98,8 +98,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
 #### DEBUG 宏參考表
 
-| DEBUG 宏 | 模組 | 輸出 | 函數 |
-|------------|--------|--------|----------|
+| DEBUG 宏    | 模組     | 輸出                                              | 函數                                                                                       |
+| ----------- | -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `DEBUG_I2C` | I2C 通用 | 錯誤消息<br>超時警告<br>RX 回調計數器<br>設備發現 | `dataUart_PrintI2CError()`<br>`dataUart_PrintI2CStatus()`<br>`dataUart_PrintDeviceFound()` |
 
 #### 輸出範例
@@ -113,9 +113,9 @@ I2C_Timeout: Slave=0
 I2C_Read FAIL: Code=1, HAL_state=32
 ```
 
-### data_uart 模組
+### dataPrint 模組
 
-所有調試打印函數集中在 `data_uart` 模組：
+所有調試打印函數集中在 `dataPrint` 模組：
 
 ```c
 // I2C 調試函數（由 DEBUG_I2C 控制）

@@ -67,13 +67,18 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # 用户应用源文件
     Core/Src/main.c # 主程序入口
     Libraries/I2C/i2c_common.c # I2C通信模块
-    Libraries/Uart/data_uart.c # UART数据收发
+    Libraries/Uart/dataPrint.c # UART数据收发
     Libraries/Button/button.c # 按键处理模块
-    Libraries/Module/MPU6050/MPU6050.c # MPU6050传感器驱动
-    Libraries/Module/MPU6050/MPU6050_DMP.c # MPU6050 DMP功能
 
-    # Libraries/Module/MPU6050/MotionDriver/inv_mpu_dmp_motion_driver.c # DMP驱动
-    # Libraries/Module/MPU6050/MotionDriver/inv_mpu.c # MPU核心驱动
+    # Libraries/Module/MPU6050/MPU6050.c # MPU6050传感器驱动
+    # Libraries/Module/MPU6050/MPU6050_DMP.c # MPU6050 DMP功能
+    Libraries/Module/MPU6050/MPU6050DMP.c # MPU6050传感器驱动
+    Libraries/Module/MPU6050/MotionDriver/inv_mpu_dmp_motion_driver.c # DMP驱动
+    Libraries/Module/MPU6050/MotionDriver/inv_mpu.c # MPU核心驱动
+
+    Libraries/Module/Cam/cam.c # 摄像头模块
+    Libraries/Module/Xsound/xsound.c # 声音模块
+    Libraries/Module/Encoder/encoder.c # 编码器模块
     Libraries/Module/Motors/motors.c # 电机控制
     Libraries/Module/IR/ir.c # 红外传感器
     Libraries/soccer.c # 主控制逻辑
@@ -93,7 +98,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/Module/IR # 红外传感器头文件
     Libraries/Module/MPU6050 # MPU6050传感器头文件
     Libraries/Module/MPU6050/MotionDriver # DMP驱动头文件
+    Libraries/Module/Cam # 摄像头头文件
+    Libraries/Module/Xsound # 声音模块头文件
     Libraries/Module/Motors # 电机控制头文件
+    Libraries/Module/Encoder # 编码器头文件
     Libraries/Uart # UART相关头文件
     Libraries/I2C # I2C相关头文件
     Libraries/ # 库根目录
@@ -123,9 +131,9 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
     # 可选调试宏（按需启用）:
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
-    # DEBUG_MPU6050_DMP    # MPU6050姿态（滚转/俯仰/偏航）调试
+    DEBUG_MPU6050_DMP    # MPU6050姿态（滚转/俯仰/偏航）调试
+    # DEBUG_I2C # I2C通信错误和状态调试
 
-    DEBUG_I2C            # I2C通信错误和状态调试
     # DEBUG_MOTORS         # 电机测试PWM值调试
     # DEBUG_SOCCER         # 足球机器人状态机转换和决策调试
 

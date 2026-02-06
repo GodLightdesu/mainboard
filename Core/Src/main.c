@@ -19,9 +19,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
-#include "button.h"
 #include "dma.h"
 #include "i2c.h"
+#include "iwdg.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -31,13 +31,11 @@
 #include "stdio.h"
 #include "string.h"
 #include "const.h"
-#include "data_uart.h"
+#include "dataPrint.h"
 
 #include "ir.h"
-#include "MPU6050.h"
-#include "MPU6050_DMP.h"
+#include "MPU6050DMP.h"
 #include "motors.h"
-
 #include "button.h"
 #include "soccer.h"
 /* USER CODE END Includes */
@@ -125,6 +123,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_TIM7_Init();
+  MX_IWDG1_Init();
   /* USER CODE BEGIN 2 */
   /* Initialize status LEDs */
   HAL_GPIO_WritePin(GPIOD, LED_2_Pin, GPIO_PIN_SET);
@@ -146,31 +145,37 @@ int main(void)
   // IR_SetSlaveEnabled(IR_SLAVE_2, false);
   
   /* Check for I2C devices before initializing (optional debugging) */
-  // I2C_Find(&huart4, &hi2c3, IR_GetSlaveAddress(IR_SLAVE_1));
-  // I2C_Find(&huart4, &hi2c3, IR_GetSlaveAddress(IR_SLAVE_2));
+  // I2C_Find(&hi2c3, IR_GetSlaveAddress(IR_SLAVE_1));
+  // I2C_Find(&hi2c3, IR_GetSlaveAddress(IR_SLAVE_2));
   
-  /* Initialize MPU6050 with error handling */
+  /* Initialize MPU6050 with retry loop */
   uint16_t addr = 0x68;     // mpu6050
-  if (I2C_Find(&huart4, &hi2c3, addr)) {
-    MPU6050_init(&hi2c3);
-    MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
-  } else {
-    dataUart_PrintInitError("MPU6050 not found", 0);
+  int result = -1;
+  while (result != 0) {
+    if (I2C_Find(&hi2c3, addr)) {
+      result = MPU6050_DMP_Init();
+      if (result != 0) {
+        dataUart_PrintInitError("MPU6050 DMP Init failed (retrying)", result);
+        HAL_Delay(100);  // Wait 100ms before retry
+      }
+    } else {
+      dataUart_PrintInitError("MPU6050 not found (retrying)", 0);
+      HAL_Delay(100);  // Wait 100ms before retry
+    }
+    HAL_IWDG_Refresh(&hiwdg1);  // Refresh watchdog during init
   }
+  dataUart_SendString("MPU6050 initialized successfully!\r\n");
 
   /* Cache module data pointers for efficiency */
   static const IR_t *irDataPtr;
-  static const MPU6050_t *mpuDataPtr;
-  static const MPU6050_DMP_t *mpuDmpDataPtr;
+  static const MPU6050_DMP_t *mpuDataPtr;
   irDataPtr = IR_GetData();
-  mpuDataPtr = MPU6050_GetData();
-  mpuDmpDataPtr = MPU6050_DMP_GetData();
+  mpuDataPtr = MPU6050DMP_GetData();
 
   /* Create module data struct once */
   static ModuleData_t moduleData;
   moduleData.irData = irDataPtr;
   moduleData.mpuData = mpuDataPtr;
-  moduleData.dmpData = mpuDmpDataPtr;
 
   // Button
   Button_Init();
@@ -195,6 +200,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
+    HAL_IWDG_Refresh(&hiwdg1);  // Refresh watchdog to prevent reset
     const uint32_t currentTime = HAL_GetTick();
     /* Status LED heartbeat (non-blocking) */
     if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
@@ -204,14 +210,19 @@ int main(void)
 
     /* Update all sensor data */
     updateData();
-    
     /* Process data in soccer module */
     soccer_ProcessData(&moduleData);
     
-    /* TODO: Implement state machine logic */
-    // State_t SoccerState = getState();
-    // Use state for advanced behaviors like defense, out of bounds detection, etc.
-
+    /* Print MPU6050 Euler angles */
+    #ifdef DEBUG_MPU6050_DMP
+    if (Soccer_IsSystemStarted() && MPU6050_DMP_IsDataReady()) {
+      char msg[80];
+      snprintf(msg, sizeof(msg), "Euler: Roll=%.2f Pitch=%.2f Yaw=%.2f\r\n",
+               mpuDataPtr->euler.roll, mpuDataPtr->euler.pitch, mpuDataPtr->euler.yaw);
+      dataUart_SendString(msg);
+    }
+    #endif
+    
     HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */
 
@@ -242,9 +253,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 4;

@@ -1,5 +1,5 @@
-#ifndef DATA_UART_H
-#define DATA_UART_H
+#ifndef DATAPRINT_H
+#define DATAPRINT_H
 
 #include "main.h"
 #include "usart.h"
@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "MPU6050.h"
-#include "MPU6050_DMP.h"
 #include "ir.h"
 // Forward declaration to avoid circular include
 struct Button_t;
@@ -20,10 +18,6 @@ void dataUart_SendString(const char *str);
 /* Debug print functions */
 void dataUart_PrintInitMessage(const char *moduleName);
 void dataUart_PrintInitError(const char *errorMsg, int statusCode);
-
-// MPU6050 debug functions
-void dataUart_PrintMPU6050Data(const MPU6050_t* mpuData);
-void dataUart_PrintMPU6050Attitude(const MPU6050_DMP_t *dmpData);
 
 // IR debug functions
 HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size);
@@ -46,4 +40,4 @@ void dataUart_PrintSoccerState(const char *stateName, float ballAngle, float bal
 void dataUart_PrintButtonEvent(uint8_t btnIndex, const char *buttonName, const char *eventName);
 void dataUart_PrintButtonState(uint8_t btnIndex, const char *buttonName, const char *stateName);
 
-#endif // DATA_UART_H
+#endif // DATAPRINT_H

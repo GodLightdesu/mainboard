@@ -78,7 +78,8 @@ uint32_t spd_Map(uint8_t speed);
 
 /* Motor advanced control functions */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3);
-void polarMove(float angle_deg, uint8_t speed);
+void polarMove(float angle_deg, uint8_t speed_percent);
+void polarMoveWthCorr(float angle_deg, uint8_t speed_percent, int yaw_corr);
 void mtrs_StopAll(void);
 
 /* Test and calibration functions */

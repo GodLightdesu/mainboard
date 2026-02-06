@@ -2,9 +2,26 @@
 
 這是一個基於 STM32H750 微控制器的主控板韌體專案，用於控制多馬達機器人系統並整合 IR 感測器陣列。
 
-## 🎉 最新更新 (v2.6.0 - 2026-01-30)
+## 🎉 最新更新 (v2.7.0 - 2026-02-06)
 
-### 🎮 按鍵控制模組新增
+### 🐕 看門狗保護系統
+
+- **獨立看門狗 (IWDG) 整合**：使用 LSI 32kHz 時鐘源
+  - Prescaler: 256 分頻
+  - Reload 值: 4095
+  - 看門狗超時時間: 約 32.768 秒
+- **自動刷新機制**：在主循環中定期刷新看門狗，防止系統重置
+- **等待啟動保護**：在 `Soccer_WaitForStart()` 中持續刷新看門狗
+  - 防止系統等待按鍵啟動時被看門狗重置
+  - 每 10ms 循環檢查系統啟動狀態並刷新看門狗
+- **MPU6050 DMP**: MPU6050 成功使用了 InvenSense DMP motion driver（阻塞 I2C）
+- **LED 指示系統**：LED4 (GPIOB) 閃爍表示等待系統啟動
+  - 500ms 閃爍週期提供視覺化系統狀態
+  - 系統啟動後 LED4 保持點亮
+- **可靠性提升**：系統異常時自動重置恢復正常運行
+
+### 🎮 按鍵控制模組 (v2.6.0)
+
 - **完整按鍵狀態機**：實現消抖、單擊、雙擊、長按等多種按鍵功能
   - 支持 8 個按鍵 (GPIOD/GPIOC)
   - 事件驅動設計：CLICK、DOUBLE_CLICK、LONG_PRESS 等
@@ -14,6 +31,7 @@
 - **調試支持**：完整的 UART 調試輸出和狀態監控
 
 ### 🚀 ARM CMSIS DSP 效能優化
+
 - **硬體加速數學運算**：全面整合 ARM CMSIS DSP 函數庫
   - 正弦/餘弦函數：`sinf()` → `arm_sin_f32()` / `cosf()` → `arm_cos_f32()`
   - 平方根運算：`sqrtf()` → `arm_sqrt_f32()`
@@ -23,6 +41,7 @@
 - **效能提升**：利用 STM32H7 Cortex-M7 FPU 和 DSP 指令集
 
 ### 🤖 足球機器人基礎控制邏輯
+
 - **基礎控制實現**：基於 IR 和 MPU6050 數據的簡單決策邏輯
   - 偏航角校正：當 yaw > 10° 時後退，yaw < -10° 時前進
   - 足球追逐：當 yaw 在範圍內且檢測到足球時，使用極座標移動追逐
@@ -31,6 +50,7 @@
 - **模組化設計**：清晰的數據處理和控制分離
 
 ### 模組封裝重構 (v2.4.0)
+
 - **靜態變數私有化**：所有模組變數改為靜態，通過 getter 函數訪問
   - `MPU6050_GetData()`: 返回 `const MPU6050_Data_t*`
   - `IR_GetData()`: 返回 `const IR_Data_t*`
@@ -39,6 +59,7 @@
 - **記憶體優化**：FLASH 使用率 67.23%，消除循環依賴
 
 ### I2C 總線管理器重構 (v2.3.0)
+
 - **全局總線鎖機制**：實現真正的多模組輪流使用共享 I2C 總線
 - **原子化總線獲取**：`I2C_Bus_TryAcquire()` 確保只有一個模組可佔用總線
 - **自動總線釋放**：傳輸完成、錯誤、超時時自動釋放總線
@@ -46,6 +67,7 @@
 - **支援多總線**：可管理最多 4 條 I2C 總線 (I2C1-I2C4)
 
 ### 調試系統重構 (v2.2.0)
+
 - **模塊化 DEBUG 宏**：為每個模塊獨立控制 UART 打印
   - `DEBUG_MPU6050`: MPU6050 傳感器數據
   - `DEBUG_MPU6050_DMP`: MPU6050 姿態數據 (Roll/Pitch/Yaw)
@@ -76,14 +98,14 @@
 - **微控制器**: STM32H750XX
 - **核心**: ARM Cortex-M7
 - **系統時鐘**: 240 MHz (透過 HSI + PLL)
-- **記憶體**: 
+- **記憶體**:
   - Flash: 128 KB (使用 67.23%)
   - SRAM: 1 MB (含 DMA 緩衝區於 D2 域)
 - **調試介面**: SWD (Serial Wire Debug)
 
 ## 🏗️ 系統架構
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │         STM32H750 主控板                │
 ├─────────────────────────────────────────┤
@@ -128,6 +150,7 @@
 ### 1. **通用 I2C 狀態機框架 (i2c_common)**
 
 #### 全局總線管理器 (I2C_BusManager_t)
+
 - **多模組協調**：MPU6050、IR 等模組安全共享同一 I2C 周邊
 - **原子化獲取**：`I2C_Bus_TryAcquire()` 確保獨佔訪問
   - 使用 `__disable_irq()/__enable_irq()` 保證原子性
@@ -145,6 +168,7 @@
 - **防止衝突**：徹底消除多模組同時訪問 I2C 硬體的競爭條件
 
 #### 通用狀態機特性
+
 - 可重用的狀態機，支援任意 I2C 模組
 - 支援最多 4 個從機裝置（每個模組）
 - DMA 非阻塞式資料傳輸
@@ -157,6 +181,7 @@
 - 32-byte 對齊的 DMA 緩衝區
 
 ### 2. **馬達控制系統**
+
 - 4 個獨立 DC 馬達控制 (FL, FR, RL, RR)
 - H 橋驅動器介面
 - PWM 頻率: 10 kHz
@@ -168,19 +193,25 @@
 - 馬達測試與校準功能
 
 ### 3. **IR 感測器陣列**
+
 - 2 個 I2C 從機，每個配備 7 個感測器
 - 總計 14 個 IR 感測器
 - 自動偵測最大值與位置
 - 即時資料串流輸出
 
 ### 4. **MPU6050 IMU 模塊**
+
 - 6 軸慣性測量單元 (3 軸加速度 + 3 軸陀螺儀)
-- 互補濾波器 (Complementary Filter) 姿態估計
+- **DMP (Digital Motion Processor) 姿態估計**
+  - 互補濾波器 (Complementary Filter) 實現
+  - 硬體加速四元數計算
+  - 陀螺儀自動校準和漂移補償
 - 實時 Roll/Pitch/Yaw 計算
 - 四元數輸出支援
 - 溫度讀取
 
 ### 5. **模塊化調試系統**
+
 - **獨立 DEBUG 宏**：每個模塊可單獨啟用/禁用調試輸出
 - **集中式打印管理**：所有 UART 打印函數位於 data_uart 模塊
 - **統一配置**：在 CMakeLists.txt 中控制所有調試輸出
@@ -188,12 +219,14 @@
 - **節省資源**：Release 版本可完全禁用調試輸出
 
 ### 6. **UART 資料輸出**
+
 - 格式化資料傳輸
 - 感測器數值顯示
 - 調試訊息輸出
 - PWM 監控資訊
 
 ### 7. **按鍵控制系統**
+
 - **完整狀態機**：支援消抖、單擊、雙擊、長按等多種按鍵事件
 - **8 個按鍵支持**：配置在 GPIOD 和 GPIOC 上
   - Button 1: 啟動按鈕 (GPIOD)
@@ -209,7 +242,7 @@
 
 ## 📁 專案結構
 
-```
+```text
 mainboard/
 ├── Core/                      # STM32CubeMX 產生的核心檔案
 │   ├── Inc/                   # HAL 標頭檔
@@ -300,26 +333,33 @@ cmake --build build/Debug
 本專案提供以下 VS Code Tasks:
 
 #### 1. **列出可用介面**
+
 ```bash
 Task: CubeProg: List all available communication interfaces
 ```
+
 檢視連接的 ST-Link 除錯器。
 
 #### 2. **燒錄韌體 (SWD)**
+
 ```bash
 Task: CubeProg: Flash project (SWD)
 ```
+
 透過 SWD 介面燒錄已編譯的韌體。
 
 #### 3. **建構 + 燒錄**
+
 ```bash
 Task: Build + Flash
 ```
+
 完整重新建構並燒錄韌體 (建議使用)。
 
 ## ⚙️ 硬體配置
 
 ### I2C3 配置
+
 - **用途**: IR 感測器（2個從機）+ MPU6050 IMU
 - **IR 從機 1**: 0x30 (7個感測器)
 - **IR 從機 2**: 0x31 (7個感測器)
@@ -825,7 +865,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 | DEBUG 宏 | 模塊 | 輸出內容 | 函數 |
 |------------|------|----------|------|
 | `DEBUG_MPU6050` | MPU6050 | 傳感器數據 (Ax/Ay/Az/Gx/Gy/Gz/T)<br>初始化消息 | `dataUart_PrintMPU6050Data()`<br>`dataUart_PrintInitMessage()` |
-| `DEBUG_MPU6050_DMP` | MPU6050 DMP | 姿態數據 (Roll/Pitch/Yaw)<br>初始化消息 | `dataUart_PrintMPU6050Attitude()`<br>`dataUart_PrintInitMessage()` |
+| `DEBUG_MPU6050_DMP` | MPU6050 DMP | DMP 姿態數據 (Roll/Pitch/Yaw)<br>DMP 初始化消息<br>陀螺儀校準狀態 | `dataUart_PrintMPU6050Attitude()`<br>`dataUart_PrintInitMessage()` |
 | `DEBUG_IR` | IR 感測器 | 眼睛數據 (Eye/Val)<br>IR 數據解析 | `dataUart_PrintIRData()`<br>`ParseAndDisplayIRData()` |
 | `DEBUG_I2C` | I2C 通訊 | I2C 錯誤信息<br>I2C 超時<br>RX 回調計數<br>設備發現 | `dataUart_PrintI2CError()`<br>`dataUart_PrintI2CStatus()`<br>`dataUart_PrintDeviceFound()`<br>`DisplayRawHexData()` |
 | `DEBUG_MOTORS` | 馬達 | 測試標題<br>PWM 值 | `dataUart_PrintMotorTest()`<br>`dataUart_SendFormattedPWM()` |

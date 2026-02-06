@@ -1,5 +1,5 @@
 #include "i2c_common.h"
-#include "data_uart.h"
+#include "dataPrint.h"
 
 /* Global bus managers (support up to 4 I2C peripherals) */
 #define MAX_I2C_BUSES 4
@@ -266,10 +266,10 @@ void I2C_Module_Process(I2C_Module_t *module) {
       if (module->hi2c != NULL) {
         /* Clear error code */
         module->hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
-        
-        /* Force HAL state back to ready if stuck */
-        if (module->hi2c->State != HAL_I2C_STATE_READY) {
-          module->hi2c->State = HAL_I2C_STATE_READY;
+
+        /* Abort current transaction */
+        if (module->activeSlaveId < module->slaveCount) {
+          HAL_I2C_Master_Abort_IT(module->hi2c, module->slaves[module->activeSlaveId].address);
         }
       }
       
@@ -348,7 +348,7 @@ void I2C_Module_ErrorCallback(I2C_Module_t *module, I2C_HandleTypeDef *hi2c) {
   }
 }
 
-bool I2C_Find(UART_HandleTypeDef* huart, I2C_HandleTypeDef *hi2c, uint16_t addr) {
+bool I2C_Find(I2C_HandleTypeDef *hi2c, uint16_t addr) {
   if (hi2c == NULL) { return false; }
 
   if (HAL_I2C_IsDeviceReady(hi2c, addr << 1, 3, 100) == HAL_OK) {

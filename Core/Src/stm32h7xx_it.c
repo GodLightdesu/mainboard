@@ -23,7 +23,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "ir.h"
-#include "MPU6050.h"
 #include "button.h"
 /* USER CODE END Includes */
 
@@ -284,7 +283,7 @@ void I2C3_ER_IRQHandler(void)
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_RxCallback(hi2c);
-  MPU6050_RxCallback(hi2c);
+  // MPU6050_RxCallback(hi2c); // Not used with new MPU6050DMP library
 }
 
 /**
@@ -293,7 +292,7 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_RxCallback(hi2c);
-  MPU6050_RxCallback(hi2c);
+  // MPU6050_RxCallback(hi2c); // Not used with new MPU6050DMP library
 }
 
 /**
@@ -302,7 +301,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_ErrorCallback(hi2c);
-  MPU6050_ErrorCallback(hi2c);
+  // MPU6050_ErrorCallback(hi2c); // Not used with new MPU6050DMP library
 }
 
 /* USER CODE END 1 */

@@ -20,7 +20,6 @@
 #define IR_SLAVE_1_ADDR (0x30 << 1)
 #define IR_SLAVE_2_ADDR (0x31 << 1)
 
-
 #include "i2c_common.h"
 #include "arm_math.h"
 #include "const.h"

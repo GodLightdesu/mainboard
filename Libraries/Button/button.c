@@ -2,9 +2,9 @@
 #include "stm32h7xx_hal.h"
 #include <string.h>
 
-// 添加 data_uart 头文件用于调试输出
+// 添加 dataPrint 头文件用于调试输出
 #ifdef DEBUG_BUTTON
-#include "data_uart.h"
+#include "dataPrint.h"
 #endif
 
 static const BtnPin_t btns_Pin[MAX_BUTTONS] = {

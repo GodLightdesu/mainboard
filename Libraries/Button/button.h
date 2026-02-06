@@ -13,9 +13,9 @@
 #include <stdint.h>
 #include <string.h>
 
-// 添加 data_uart 头文件用于调试输出
+// 添加 dataPrint 头文件用于调试输出
 #ifdef DEBUG_BUTTON
-#include "data_uart.h"
+#include "dataPrint.h"
 #endif
 
 // 按键状态枚举
@@ -33,9 +33,9 @@ typedef enum {
 // 按键事件枚举
 typedef enum {
   BTN_EVENT_NONE = 0,          // 无事件
-  BTN_EVENT_CLICK,             // 单击
+  BTN_EVENT_CLICK,             // 单击（用于启动）
   BTN_EVENT_DOUBLE_CLICK,      // 双击（用于紧急停止）
-  BTN_EVENT_LONG_PRESS_START,  // 长按开始（用于启动）
+  BTN_EVENT_LONG_PRESS_START,  // 长按开始
   BTN_EVENT_LONG_PRESS_HOLD,   // 长按保持
   BTN_EVENT_LONG_PRESS_END,    // 长按结束
   BTN_NUM_EVENTS               // 事件总数

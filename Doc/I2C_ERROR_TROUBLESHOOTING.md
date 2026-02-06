@@ -54,7 +54,7 @@ I2C_Error: Code=0x1, Slave=0
 - 如果設備不存在，跳過初始化
 
 ### 4. 調試輸出
-**檔案**: `Libraries/Uart/data_uart.{c,h}`
+**檔案**: `Libraries/Uart/dataPrint.{c,h}`
 - 添加 `dataUart_PrintInitError()` 函數
 - 提供更詳細的錯誤訊息
 

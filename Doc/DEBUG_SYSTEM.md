@@ -4,12 +4,12 @@
 
 ## 概述
 
-本專案採用**模塊化 DEBUG 宏系統**，允許為每個模塊獨立控制 UART 調試輸出。所有打印函數集中在 `data_uart` 模塊中管理。
+本專案採用**模塊化 DEBUG 宏系統**，允許為每個模塊獨立控制 UART 調試輸出。所有打印函數集中在 `dataPrint` 模塊中管理。
 
 ### 主要特性
 
 - ✅ **模塊化控制**：每個模塊獨立的 DEBUG 宏
-- ✅ **集中管理**：所有打印函數在 `data_uart` 模塊
+- ✅ **集中管理**：所有打印函數在 `dataPrint` 模塊
 - ✅ **統一配置**：在 `CMakeLists.txt` 中統一控制
 - ✅ **靈活調試**：可選擇性啟用需要的模塊
 - ✅ **資源節省**：Release 版本可完全禁用調試輸出
@@ -20,7 +20,7 @@
 CMakeLists.txt
     ↓ 定義 DEBUG_XXX 宏
     ↓
-data_uart.c/h
+dataPrint.c/h
     ↓ 提供打印函數
     ↓
 各模塊 (mpu6050.c, ir.c, i2c_common.c, etc.)
@@ -50,20 +50,20 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
 ### DEBUG 宏對照表
 
-| DEBUG 宏 | 控制的模塊 | 輸出內容 |
-|---------|----------|---------|
-| `DEBUG_MPU6050` | MPU6050 傳感器 | • 傳感器數據 (Ax/Ay/Az/Gx/Gy/Gz/溫度)<br>• 初始化完成消息 |
-| `DEBUG_MPU6050_DMP` | MPU6050 姿態估計 | • 姿態數據 (Roll/Pitch/Yaw)<br>• 互補濾波器初始化消息 |
-| `DEBUG_IR` | IR 感測器 | • 眼睛數據 (Eye/Val)<br>• 所有感測器數值 |
-| `DEBUG_I2C` | I2C 通信 | • I2C 錯誤碼和從機 ID<br>• 超時警告<br>• RX 回調計數<br>• 設備發現消息<br>• 原始十六進制數據 |
-| `DEBUG_MOTORS` | 馬達控制 | • 馬達測試標題<br>• PWM 值和占空比<br>• 測試字符串 |
-| `DEBUG_BUTTON` | 按鍵控制 | • 按鍵事件 (CLICK/DOUBLE_CLICK/LONG_PRESS)<br>• 狀態轉換 (IDLE/PRESSED/WAIT_DOUBLE)<br>• 原始狀態變化<br>• 按鍵初始化訊息 |
+| DEBUG 宏            | 控制的模塊       | 輸出內容                                                                                                                  |
+| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `DEBUG_MPU6050`     | MPU6050 傳感器   | • 傳感器數據 (Ax/Ay/Az/Gx/Gy/Gz/溫度)<br>• 初始化完成消息                                                                 |
+| `DEBUG_MPU6050_DMP` | MPU6050 姿態估計 | • 姿態數據 (Roll/Pitch/Yaw)<br>• DMP 互補濾波器初始化消息<br>• 陀螺儀校準狀態                                                                     |
+| `DEBUG_IR`          | IR 感測器        | • 眼睛數據 (Eye/Val)<br>• 所有感測器數值                                                                                  |
+| `DEBUG_I2C`         | I2C 通信         | • I2C 錯誤碼和從機 ID<br>• 超時警告<br>• RX 回調計數<br>• 設備發現消息<br>• 原始十六進制數據                              |
+| `DEBUG_MOTORS`      | 馬達控制         | • 馬達測試標題<br>• PWM 值和占空比<br>• 測試字符串                                                                        |
+| `DEBUG_BUTTON`      | 按鍵控制         | • 按鍵事件 (CLICK/DOUBLE_CLICK/LONG_PRESS)<br>• 狀態轉換 (IDLE/PRESSED/WAIT_DOUBLE)<br>• 原始狀態變化<br>• 按鍵初始化訊息 |
 
-## data_uart 模塊
+## dataPrint 模塊
 
 ### 打印函數列表
 
-文件位置：[data_uart.c](../Libraries/Uart/data_uart.c)
+文件位置：[dataPrint.c](../Libraries/Uart/dataPrint.c)
 
 ```c
 // MPU6050 調試打印
@@ -217,7 +217,7 @@ PWM: 420 (42.0%)
 
 1. **包含頭文件**：
 ```c
-#include "data_uart.h"
+#include "dataPrint.h"
 ```
 
 2. **調用打印函數**：
@@ -239,12 +239,12 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 ```
 
-2. **在 data_uart.h 中聲明新函數**：
+2. **在 dataPrint.h 中聲明新函數**：
 ```c
 void dataUart_PrintMyModuleData(int value);
 ```
 
-3. **在 data_uart.c 中實現函數**：
+3. **在 dataPrint.c 中實現函數**：
 ```c
 void dataUart_PrintMyModuleData(int value) {
 #ifdef DEBUG_MY_NEW_MODULE
@@ -261,7 +261,7 @@ void dataUart_PrintMyModuleData(int value) {
 
 4. **在模塊中調用**：
 ```c
-#include "data_uart.h"
+#include "dataPrint.h"
 
 void MyModule_Process(void) {
   // ...
@@ -335,5 +335,5 @@ void MyModule_Process(void) {
 
 - [README.md](../README.md) - 專案概述和系統架構
 - [I2C_COMMON_USAGE.md](I2C_COMMON_USAGE.md) - I2C 通用狀態機使用指南
-- [data_uart.c](../Libraries/Uart/data_uart.c) - 調試打印實現
+- [dataPrint.c](../Libraries/Uart/dataPrint.c) - 調試打印實現
 - [CMakeLists.txt](../CMakeLists.txt) - DEBUG 宏配置位置

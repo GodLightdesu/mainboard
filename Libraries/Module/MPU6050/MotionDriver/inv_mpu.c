@@ -39,10 +39,10 @@
 #if defined STM32_MPU6050
 #include "i2c.h"
 
-#define i2c_write(mpuaddr, regaddr, dsize, pdata)	HAL_I2C_Mem_Write(&hi2c3, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, HAL_MAX_DELAY)
-#define i2c_read(mpuaddr, regaddr, dsize, pdata)    HAL_I2C_Mem_Read(&hi2c3, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, HAL_MAX_DELAY)
+#define i2c_write(mpuaddr, regaddr, dsize, pdata)	HAL_I2C_Mem_Write(&hi2c3, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, 100)
+#define i2c_read(mpuaddr, regaddr, dsize, pdata)    HAL_I2C_Mem_Read(&hi2c3, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, 100)
 #define delay_ms(ms)   HAL_Delay(ms)
-#define get_ms(p)      do { *p = HAL_GetTick(); } while(0)
+#define get_ms(p)      do { *p = HAL_GetTick();} while(0)
 #define log_i(...)     do {} while (0)
 #define log_e(...)     do {} while (0)
 /* labs is already defined by TI's toolchain. */

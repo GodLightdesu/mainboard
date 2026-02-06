@@ -1,5 +1,5 @@
 #include "motors.h"
-#include "data_uart.h"
+#include "dataPrint.h"
 
 static Mtr mtrs[MOTOR_COUNT] = {
   { &htim1, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 0 (Front Left)
@@ -128,7 +128,7 @@ uint32_t spd_Map(uint8_t speed) {
   return PWM_STARTUP_MIN + ((uint32_t)speed * (PWM_MAX_VALUE - PWM_STARTUP_MIN)) / MAX_SPEED;
 }
 
-/* Motor advanced control functions */
+/* Motor advanced control functions (all -ve rotate clockwise) */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
   const int spds[MOTOR_COUNT] = {spd0, spd1, spd2, spd3};
   
@@ -172,6 +172,28 @@ void polarMove(float angle_deg, uint8_t speed_percent) {
   
   /* Set motor speeds: FL, FR, RL, RR */
   mtrs_Set4Speed(-spdB, spdA, spdB, -spdA);
+}
+
+void polarMoveWthCorr(float angle_deg, uint8_t speed_percent, int yaw_corr) {
+  /* Validate and clamp speed */
+  if (speed_percent > MAX_SPEED) { speed_percent = MAX_SPEED; }
+  /* Convert angle to radians */
+  const float angle_rad = angle_deg * (PI / 180.0f);
+  const float phase_offset = PI / 4.0f; /* 45 degrees for mecanum wheels */
+
+  /* Calculate with deadzone and rounding */
+  const float DEADZONE = 0.5f; /* Smaller deadzone since we're rounding */
+
+  /* Calculate motor speeds using mecanum kinematics */
+  float calcA = speed_percent * arm_sin_f32(angle_rad + phase_offset);
+  float calcB = speed_percent * arm_sin_f32(angle_rad - phase_offset);
+
+  /* Apply deadzone and rounding */
+  int spdA = (fabsf(calcA) < DEADZONE) ? 0 : (int)roundf(calcA);
+  int spdB = (fabsf(calcB) < DEADZONE) ? 0 : (int)roundf(calcB);
+
+  /* Set motor speeds with yaw correction: FL, FR, RL, RR */
+  mtrs_Set4Speed(-spdB + yaw_corr, spdA + yaw_corr, spdB + yaw_corr, -spdA + yaw_corr);
 }
 
 void mtrs_StopAll(void) {

@@ -1,19 +1,22 @@
-#ifndef SOCCER
-#define SOCCER
+#ifndef SOCCER_H
+#define SOCCER_H
 
 #include "ir.h"
 #include "button.h"
-#include "data_uart.h"
+#include "dataPrint.h"
 #include "motors.h"
-#include "MPU6050.h"
-#include "MPU6050_DMP.h"
+#include "MPU6050DMP.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include "iwdg.h"
 
 /* Soccer control constants */
-#define YAW_CORRECTION_THRESHOLD 10.0f  /**< Yaw angle threshold for compass correction (degrees) */
-#define BASE_SPEED 40                   /**< Base motor speed */
+#define REAL_MAX_SPEED 55               /**< Maximum motor speed */
+#define BASE_SPEED 25                   /**< Base motor speed */
 #define BALL_CHASE_SPEED_BONUS 10       /**< Additional speed when chasing ball */
+#define YAW_PID_KD 0.3                /**< Derivative gain for yaw PID control */
+#define CORR_KD 0.30f                   /**< Derivative gain for corridor correction PID */
+#define YAW_THRESHOLD 10.0f             /**< Yaw angle threshold for stopping correction (degrees) */
 
 typedef enum {
   STATE_IDLE = 0,        /**< Robot stopped, waiting for commands */
@@ -28,17 +31,20 @@ typedef enum {
  * This allows easy extension when adding new modules
  */
 typedef struct {
-  const IR_t* irData;
-  const MPU6050_t* mpuData;
-  const MPU6050_DMP_t* dmpData;
+  const IR_t *irData;
+  const MPU6050_DMP_t *mpuData;
   // Add new module pointers here as needed
 } ModuleData_t;
 
 void SoccerInit(void);
 void updateData();
 void soccer_ProcessData(const ModuleData_t *data);
+void SoccerPIDCompCar(float kd, float yaw, float target_yaw);
+int SoccerPIDCompCorr(float kd, float yaw, float target_yaw);
 
 State_t getState();
+void setState(State_t newState);
+State_t updateState(const ModuleData_t *data);
 
 void Soccer_WaitForStart(void);
 void Soccer_StartSystem(void);
