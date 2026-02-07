@@ -249,6 +249,8 @@ const IR_t* IR_GetData(void) { return &IR; }
 
 bool IR_IsDataReady(void) { return IR.dataReady; }
 
+void IR_ClearDataReady(void) { IR.dataReady = false; }
+
 bool IR_SetSlaveEnabled(uint8_t slaveId, bool enable) {
   return I2C_Module_SetSlaveEnabled(&IR.i2cModule, slaveId, enable);
 }

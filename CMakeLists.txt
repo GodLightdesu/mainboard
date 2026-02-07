@@ -81,6 +81,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/Module/Encoder/encoder.c # 编码器模块
     Libraries/Module/Motors/motors.c # 电机控制
     Libraries/Module/IR/ir.c # 红外传感器
+    Libraries/PID/PID.c # PID控制器
     Libraries/soccer.c # 主控制逻辑
 
     # CMSIS-DSP 源文件
@@ -95,6 +96,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # 用户自定义头文件路径
     Core/Inc # 主程序头文件
     Libraries/Button # 按键模块头文件
+    Libraries/PID # PID控制器头文件
     Libraries/Module/IR # 红外传感器头文件
     Libraries/Module/MPU6050 # MPU6050传感器头文件
     Libraries/Module/MPU6050/MotionDriver # DMP驱动头文件
@@ -127,11 +129,13 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     DEBUG_GENERAL # 启用通用调试信息输出
     DEBUG_BUTTON # 启用按键调试信息输出
 
+    DEBUG_SOCCER # 启用足球机器人状态机调试信息输出
+
     # DEBUG_IR # 启用红外传感器调试信息
 
     # 可选调试宏（按需启用）:
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
-    DEBUG_MPU6050_DMP    # MPU6050姿态（滚转/俯仰/偏航）调试
+    # DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
     # DEBUG_I2C # I2C通信错误和状态调试
 
     # DEBUG_MOTORS         # 电机测试PWM值调试

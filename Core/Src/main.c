@@ -111,6 +111,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C3_Init();
+  MX_I2C2_Init();
   MX_UART4_Init();
   MX_UART5_Init();
   MX_UART7_Init();
@@ -152,7 +153,7 @@ int main(void)
   uint16_t addr = 0x68;     // mpu6050
   int result = -1;
   while (result != 0) {
-    if (I2C_Find(&hi2c3, addr)) {
+    if (I2C_Find(&hi2c2, addr)) {
       result = MPU6050_DMP_Init();
       if (result != 0) {
         dataUart_PrintInitError("MPU6050 DMP Init failed (retrying)", result);
@@ -189,9 +190,20 @@ int main(void)
   // Motors
   Mtrs_Init();
 
-  // 等待系统启动（长按按钮1）
+  // Soccer初始化
   SoccerInit();
-  Soccer_WaitForStart();
+  
+  // 检查是否因IWDG复位 - 如果是，自动启动系统
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDG1RST)) {
+    // IWDG复位 - 自动启动系统
+    __HAL_RCC_CLEAR_RESET_FLAGS();  // 清除复位标志
+    dataUart_SendString("IWDG Reset detected - Auto-starting system...\r\n");
+    Soccer_StartSystem();
+    HAL_GPIO_WritePin(GPIOB, LED_4_Pin, GPIO_PIN_SET);
+  } else {
+    // 正常启动 - 等待按钮按下
+    Soccer_WaitForStart();
+  }
 
   /* Initialize timing variables */
   uint32_t lastLedToggleTime = HAL_GetTick();
@@ -210,9 +222,7 @@ int main(void)
 
     /* Update all sensor data */
     updateData();
-    /* Process data in soccer module */
-    soccer_ProcessData(&moduleData);
-    
+
     /* Print MPU6050 Euler angles */
     #ifdef DEBUG_MPU6050_DMP
     if (Soccer_IsSystemStarted() && MPU6050_DMP_IsDataReady()) {
@@ -222,6 +232,9 @@ int main(void)
       dataUart_SendString(msg);
     }
     #endif
+
+    /* Process data in soccer module */
+    soccer_ProcessData(&moduleData);
     
     HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */

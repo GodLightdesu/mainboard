@@ -6,17 +6,27 @@
 #include "dataPrint.h"
 #include "motors.h"
 #include "MPU6050DMP.h"
+#include "PID.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include "iwdg.h"
 
 /* Soccer control constants */
-#define REAL_MAX_SPEED 55               /**< Maximum motor speed */
-#define BASE_SPEED 25                   /**< Base motor speed */
-#define BALL_CHASE_SPEED_BONUS 10       /**< Additional speed when chasing ball */
-#define YAW_PID_KD 0.3                /**< Derivative gain for yaw PID control */
-#define CORR_KD 0.30f                   /**< Derivative gain for corridor correction PID */
+#define REAL_MAX_SPEED 80               /**< Maximum motor speed */
+#define BASE_SPEED 30                   /**< Base motor speed */
+#define BALL_CHASE_SPEED_BONUS 25       /**< Additional speed when chasing ball */
+/* Yaw Alignment PID - 用於原地旋轉對齊 */
+#define YAW_PID_kp 0.25f      // 提高響應速度
+#define YAW_PID_ki 0.0f     // 降低積分避免超調
+#define YAW_PID_kd 2.0f      // 增加阻尼穩定性
+
+/* Corridor Correction PID - 用於追球時的偏航修正 */
+#define CORR_kp 0.25f         // 稍微提高修正力度
+#define CORR_ki 0.f        // 降低積分避免振盪
+#define CORR_kd 2.0f         // 增加阻尼穩定性
+
 #define YAW_THRESHOLD 10.0f             /**< Yaw angle threshold for stopping correction (degrees) */
+#define INTEGRAL_LIMIT 500.0f           /**< Maximum integral accumulation for anti-windup */
 
 typedef enum {
   STATE_IDLE = 0,        /**< Robot stopped, waiting for commands */
@@ -39,8 +49,6 @@ typedef struct {
 void SoccerInit(void);
 void updateData();
 void soccer_ProcessData(const ModuleData_t *data);
-void SoccerPIDCompCar(float kd, float yaw, float target_yaw);
-int SoccerPIDCompCorr(float kd, float yaw, float target_yaw);
 
 State_t getState();
 void setState(State_t newState);

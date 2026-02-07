@@ -4,12 +4,10 @@
 #define POWER_ON_DELAY_CYCLES   1000000U
 #define LED_HEARTBEAT_MS        100U
 #define IR_SAMPLE_PERIOD_MS     20U
-#define MAIN_LOOP_DELAY_MS      1U
+#define MAIN_LOOP_DELAY_MS      10U
 
 /* I2C timing */
 #define I2C_INIT_DELAY_MS       10U
-
-
 
 #define DMA_BUFFER_ADDRESS 0x30000000
 #define DMA_CACHE_LINE_SIZE 32  /**< STM32H7 D-Cache line size */

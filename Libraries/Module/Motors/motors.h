@@ -37,7 +37,7 @@ PWM Channel Mapping:
 #include "stdint.h"
 typedef enum {
   FAST_DECAY = 0,
-  SLOW_DECAY
+  SLOW_DECAY      // spd need to be higher to achieve same effective voltage in slow decay mode
 } DecayMode_t;
 
 typedef enum {

@@ -10,7 +10,6 @@ void I2C_Bus_Init(I2C_BusManager_t *manager, I2C_HandleTypeDef *hi2c) {
   if (manager == NULL || hi2c == NULL) return;
   
   manager->hi2c = hi2c;
-  manager->owner = NULL;
   manager->locked = false;
   
   /* Register in global array if not already registered */
@@ -38,15 +37,14 @@ I2C_BusManager_t* I2C_Bus_GetManager(I2C_HandleTypeDef *hi2c) {
   return NULL;
 }
 
-bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager, I2C_Module_t *module) {
-  if (manager == NULL || module == NULL) return false;
+bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager) {
+  if (manager == NULL) return false;
   
   __disable_irq();
   
-  /* Check if bus is free or already owned by this module */
-  if (!manager->locked || manager->owner == module) {
+  /* Check if bus is free */
+  if (!manager->locked) {
     manager->locked = true;
-    manager->owner = module;
     __enable_irq();
     return true;
   }
@@ -55,17 +53,12 @@ bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager, I2C_Module_t *module) {
   return false;  /* Bus is owned by another module */
 }
 
-void I2C_Bus_Release(I2C_BusManager_t *manager, I2C_Module_t *module) {
-  if (manager == NULL || module == NULL) return;
+void I2C_Bus_Release(I2C_BusManager_t *manager) {
+  if (manager == NULL) return;
   
   __disable_irq();
   
-  /* Only release if this module owns the bus */
-  if (manager->owner == module) {
-    manager->locked = false;
-    manager->owner = NULL;
-  }
-  
+  manager->locked = false;
   __enable_irq();
 }
 
@@ -98,7 +91,7 @@ bool I2C_Module_ReadSlave(I2C_Module_t *module, uint8_t slaveId) {
   
   /* Get bus manager once and reuse throughout function */
   I2C_BusManager_t *busManager = I2C_Bus_GetManager(module->hi2c);
-  if (busManager != NULL && !I2C_Bus_TryAcquire(busManager, module)) {
+  if (busManager != NULL && !I2C_Bus_TryAcquire(busManager)) {
     /* Bus is owned by another module - wait */
     return false;
   }
@@ -171,7 +164,7 @@ bool I2C_Module_ReadSlave(I2C_Module_t *module, uint8_t slaveId) {
   
   /* Unified cleanup: release bus on failure */
   if (!success && busManager != NULL) {
-    I2C_Bus_Release(busManager, module);
+    I2C_Bus_Release(busManager);
   }
   
   return success;
@@ -235,7 +228,7 @@ void I2C_Module_Process(I2C_Module_t *module) {
       /* Release bus on timeout */
       I2C_BusManager_t *busManager = I2C_Bus_GetManager(module->hi2c);
       if (busManager != NULL) {
-        I2C_Bus_Release(busManager, module);
+        I2C_Bus_Release(busManager);
       }
     }
     break;
@@ -255,7 +248,7 @@ void I2C_Module_Process(I2C_Module_t *module) {
     /* Release bus after processing complete */
     I2C_BusManager_t *busManager = I2C_Bus_GetManager(module->hi2c);
     if (busManager != NULL) {
-      I2C_Bus_Release(busManager, module);
+      I2C_Bus_Release(busManager);
     }
     break;
     
@@ -281,7 +274,7 @@ void I2C_Module_Process(I2C_Module_t *module) {
       /* Release bus after recovery */
       I2C_BusManager_t *busManager = I2C_Bus_GetManager(module->hi2c);
       if (busManager != NULL) {
-        I2C_Bus_Release(busManager, module);
+        I2C_Bus_Release(busManager);
       }
       
       #ifdef I2C_COMMON_DEBUG
@@ -344,7 +337,7 @@ void I2C_Module_ErrorCallback(I2C_Module_t *module, I2C_HandleTypeDef *hi2c) {
   /* Release bus on error */
   I2C_BusManager_t *busManager = I2C_Bus_GetManager(module->hi2c);
   if (busManager != NULL) {
-    I2C_Bus_Release(busManager, module);
+    I2C_Bus_Release(busManager);
   }
 }
 

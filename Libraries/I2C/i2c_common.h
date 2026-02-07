@@ -47,7 +47,6 @@ typedef void (*I2C_DataProcessCallback_t)(I2C_Module_t *module, uint8_t slaveId)
  */
 typedef struct {
   I2C_HandleTypeDef *hi2c;           /**< I2C peripheral handle */
-  I2C_Module_t *owner;               /**< Current module owning the bus (NULL if free) */
   bool locked;                       /**< Bus lock status */
 } I2C_BusManager_t;
 
@@ -142,17 +141,15 @@ void I2C_Bus_Init(I2C_BusManager_t *manager, I2C_HandleTypeDef *hi2c);
 /**
  * @brief Try to acquire I2C bus for a module
  * @param manager Pointer to bus manager
- * @param module Module requesting the bus
  * @return true if bus acquired, false if busy
  */
-bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager, I2C_Module_t *module);
+bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager);
 
 /**
  * @brief Release I2C bus
  * @param manager Pointer to bus manager
- * @param module Module releasing the bus
  */
-void I2C_Bus_Release(I2C_BusManager_t *manager, I2C_Module_t *module);
+void I2C_Bus_Release(I2C_BusManager_t *manager);
 
 /**
  * @brief Get global bus manager for an I2C peripheral

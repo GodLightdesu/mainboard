@@ -104,6 +104,11 @@ const IR_t* IR_GetData(void);
 bool IR_IsDataReady(void);
 
 /**
+ * @brief Clear IR data ready flag
+ */
+void IR_ClearDataReady(void);
+
+/**
  * @brief Enable or disable a specific IR slave device
  * @param slaveId The slave ID (IR_SLAVE_1 or IR_SLAVE_2)
  * @param enable true to enable, false to disable

@@ -8,6 +8,11 @@
 #endif
 
 static MPU6050_DMP_t dmpData = {0};
+static uint8_t consecutiveI2CErrors = 0;  // Track consecutive I2C errors
+
+// Yaw reset variables
+static float prev_yaw = 0.0f;       // Last actual yaw reading from DMP
+static float re_zero_yaw = 0.0f;    // Offset to apply for yaw reset
 
 static signed char gyro_orientation[9] = {-1, 0, 0,
                                            0,-1, 0,
@@ -92,28 +97,34 @@ int MPU6050_DMP_Init(void) {
 
   result = mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL); // enable gyro and accel
   if (result != 0) { return -2; }
+  
+  // result = mpu_set_gyro_fsr(GYRO_FSR_1000DPS);   // Set to ±1000 dps for higher range
+  // if (result != 0) { return -3; }
+  // result = mpu_set_accel_fsr(ACCEL_FSR_4G);      // Set to ±4g for normal movement
+  // if (result != 0) { return -4; }
+  
   result = mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);  // configure fifo
-  if (result != 0) { return -3; }
+  if (result != 0) { return -5; }
   result = mpu_set_sample_rate(DEFAULT_MPU_HZ); // set sample rate
-  if (result != 0) { return -4; }
+  if (result != 0) { return -6; }
 
   result = dmp_load_motion_driver_firmware();   // load dmp firmware
-  if (result != 0) { return -5; }
+  if (result != 0) { return -7; }
   result = dmp_set_orientation(inv_orientation_matrix_to_scalar(gyro_orientation)); // set orientation
-  if (result != 0) { return -6; }
+  if (result != 0) { return -8; }
 
   result = dmp_enable_feature(  // enable dmp features
     DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_TAP | DMP_FEATURE_ANDROID_ORIENT | 
     DMP_FEATURE_SEND_RAW_ACCEL | DMP_FEATURE_SEND_CAL_GYRO | DMP_FEATURE_GYRO_CAL
   );
-  if (result != 0) { return -7; }
+  if (result != 0) { return -9; }
   result = dmp_set_fifo_rate(DEFAULT_MPU_HZ); // set fifo rate
-  if (result != 0) { return -8; }
+  if (result != 0) { return -10; }
 
   result = run_self_test(); // run self test and push gyro and accel bias to the hardware registers
-  if (result != 0) { return -9; }
+  if (result != 0) { return -11; }
   result = mpu_set_dmp_state(1);  // enable dmp
-  if (result != 0) { return -10; }
+  if (result != 0) { return -12; }
   return 0;
 }
 
@@ -125,12 +136,11 @@ int MPU6050DMP_updateData(void) {
   short sensors;
   unsigned char more;
 
-  // Clear ready flag at start of update
-  dmpData.ready = false;
-
   float q0, q1, q2, q3 = 0.0f;
-  if (dmp_read_fifo(gyro, accel, quat, &timestamp, &sensors, &more)) {
-    return -1; // failed to read fifo
+  int result = dmp_read_fifo(gyro, accel, quat, &timestamp, &sensors, &more);
+  if (result != 0) {
+    // Failed to read fifo - could be no data available or I2C error
+    return -1;
   }
 
   if (sensors & INV_WXYZ_QUAT) {
@@ -154,9 +164,24 @@ int MPU6050DMP_updateData(void) {
 
     dmpData.euler.roll = roll;
     dmpData.euler.pitch = pitch;
-    dmpData.euler.yaw = yaw;
+    
+    // Store actual yaw for reset functionality
+    prev_yaw = yaw;
+    
+    // Apply yaw re-zero offset: apparent_yaw = actual_yaw - re_zero_yaw
+    float apparent_yaw = yaw - re_zero_yaw;
+    
+    // Normalize to [-180, 180] range
+    if (apparent_yaw > 180.0f) {
+      apparent_yaw -= 360.0f;
+    } else if (apparent_yaw < -180.0f) {
+      apparent_yaw += 360.0f;
+    }
+    
+    dmpData.euler.yaw = apparent_yaw;
     
     dmpData.ready = true;  // Mark data as ready
+    consecutiveI2CErrors = 0;  // Reset error counter on successful read
   }
 
   return 0; // success
@@ -168,20 +193,20 @@ void MPU6050DMP_HandleI2CError(void) {
   
   #ifdef DEBUG_I2C
   char msg[100];
-  snprintf(msg, sizeof(msg), "MPU6050 I2C Error: State=%d, Error=0x%lX\r\n", 
-           i2cState, i2cError);
+  snprintf(msg, sizeof(msg), "MPU6050 I2C: State=%d, Error=0x%lX, ErrCount=%d\r\n", 
+           i2cState, i2cError, consecutiveI2CErrors);
   dataUart_SendString(msg);
   #endif
   
   if (i2cError != HAL_I2C_ERROR_NONE) {
-    // Abort any ongoing transfer
+    consecutiveI2CErrors++;
+    // Soft recovery: Clear error flags and reset FIFO
     HAL_I2C_Master_Abort_IT(&hi2c3, 0x68 << 1);
-    // Clear error flags
     __HAL_I2C_CLEAR_FLAG(&hi2c3, I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_AF | I2C_FLAG_OVR);
-    
-    #ifdef DEBUG_I2C
-    dataUart_SendString("MPU6050 I2C error cleared\r\n");
-    #endif
+    mpu_reset_fifo();
+  } else {
+    // No error - reset counter
+    consecutiveI2CErrors = 0;
   }
 }
 
@@ -193,6 +218,62 @@ void MPU6050_DMP_ClearReady(void) {
   dmpData.ready = false;
 }
 
+void MPU6050DMP_ResetErrorCounter(void) {
+  consecutiveI2CErrors = 0;
+}
+
 const MPU6050_DMP_t* MPU6050DMP_GetData(void) {
   return &dmpData;
+}
+
+/**
+ * @brief Set gyroscope full scale range
+ * @param fsr_dps Full scale range in dps
+ *                Use: GYRO_FSR_250DPS, GYRO_FSR_500DPS, GYRO_FSR_1000DPS, or GYRO_FSR_2000DPS
+ * @return 0 on success, -1 on error
+ */
+int MPU6050_DMP_SetGyroFSR(unsigned short fsr_dps) {
+  return mpu_set_gyro_fsr(fsr_dps);
+}
+
+/**
+ * @brief Set accelerometer full scale range
+ * @param fsr_g Full scale range in g
+ *              Use: ACCEL_FSR_2G, ACCEL_FSR_4G, ACCEL_FSR_8G, or ACCEL_FSR_16G
+ * @return 0 on success, -1 on error
+ */
+int MPU6050_DMP_SetAccelFSR(unsigned char fsr_g) {
+  return mpu_set_accel_fsr(fsr_g);
+}
+
+/**
+ * @brief Get current gyroscope full scale range
+ * @param fsr_dps Pointer to store FSR value in degrees per second
+ * @return 0 on success, -1 on error
+ */
+int MPU6050_DMP_GetGyroFSR(unsigned short *fsr_dps) {
+  return mpu_get_gyro_fsr(fsr_dps);
+}
+
+/**
+ * @brief Get current accelerometer full scale range
+ * @param fsr_g Pointer to store FSR value in g
+ * @return 0 on success, -1 on error
+ */
+int MPU6050_DMP_GetAccelFSR(unsigned char *fsr_g) {
+  return mpu_get_accel_fsr(fsr_g);
+}
+
+/**
+ * @brief Reset yaw to zero at current orientation
+ * 
+ * This function captures the current yaw angle and sets it as the new zero reference.
+ * Subsequent yaw readings will be relative to this new zero point.
+ * Formula: apparent_yaw = actual_yaw - re_zero_yaw
+ * 
+ * @return true if reset successful, false if no data ready
+ */
+bool MPU6050_DMP_ResetYaw(void) {
+  re_zero_yaw = prev_yaw;
+  return true;
 }

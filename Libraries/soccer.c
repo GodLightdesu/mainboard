@@ -1,12 +1,17 @@
 #include "soccer.h"
 #include "button.h"
 #include "MPU6050DMP.h"
+#include "motors.h"
 
 // 系统状态变量
 static volatile bool systemStarted = false;
 static volatile bool emergencyStop = false;
 static State_t state = STATE_IDLE;
 static uint32_t systemStartTime = 0;
+
+// PID控制器实例
+static PID_Controller_t yawAlignPID;    // 车辆旋转对齐PID
+static PID_Controller_t yawCorrectPID;  // 追球时偏航修正PID
 
 // 按钮控制回调函数
 static void SoccerButtonControl(uint8_t btn_index, BtnEvent_t event) {
@@ -32,10 +37,8 @@ static void SoccerButtonControl(uint8_t btn_index, BtnEvent_t event) {
   case 2: // 按钮3 - Reset Yaw
     if (event == BTN_EVENT_CLICK) {
       // 单击重置陀螺仪偏航角（如果系统已启动）
-      // Note: The new MPU6050DMP API doesn't support ResetYaw function
-      // You would need to implement this in the DMP library if needed
       if (systemStarted) {
-        // MPU6050_DMP_ResetYaw(); // Not available in new API
+        MPU6050_DMP_ResetYaw();
       }
     } break;
   case 3: // 按钮4 - Reset All
@@ -51,35 +54,56 @@ void SoccerInit(void) {
   Button_SetSystemControlCallback(1, SoccerButtonControl);  // 按钮2：紧急停止
   Button_SetSystemControlCallback(2, SoccerButtonControl);  // 按钮3：reset yaw
   Button_SetSystemControlCallback(3, SoccerButtonControl);  // 按钮4：reset all
+  
+  // 初始化PID控制器
+  PID_Init(&yawAlignPID, YAW_PID_kp, YAW_PID_ki, YAW_PID_kd, 
+           INTEGRAL_LIMIT, -BASE_SPEED, BASE_SPEED);
+  PID_Init(&yawCorrectPID, CORR_kp, CORR_ki, CORR_kd,
+           INTEGRAL_LIMIT, -BASE_SPEED, BASE_SPEED);
 }
 
 void updateData() {
   // 检查紧急停止 or 系统未启动，no read data
-  if (emergencyStop || !systemStarted) {
-    return;
-  }
-
-  // 輪流讀取 MPU6050 和 IR，避免 I2C 匯流排衝突
-  static bool readMPU = true;
+  if (emergencyStop || !systemStarted) { return; }
   
-  if (HAL_I2C_GetState(&hi2c3) == HAL_I2C_STATE_READY) {
-    if (readMPU) {
-      /* Update MPU6050 DMP data (blocking) */
-      int result = MPU6050DMP_updateData();
-      if (result != 0) {
-        // Update failed - handle I2C errors in MPU6050 library
-        MPU6050DMP_HandleI2CError();
-      }
-      // Always switch to IR next time, regardless of success/failure
-      readMPU = false;
-    } else {
-      /* Process IR state machine (non-blocking DMA) */
-      IR_Process();
-      readMPU = true;
-    }
-  }
+  /* Update MPU6050 DMP data (blocking) */
+  int result = MPU6050DMP_updateData();
+  if (result != 0) { MPU6050DMP_HandleI2CError(); }
+  
+  // IR sensor update (non-blocking, uses internal state machine and flags)
+  IR_Process();
 }
 
+void setState(State_t newState) { state = newState; }
+State_t getState() { return state; }
+State_t updateState(const ModuleData_t *data) {
+  State_t currentState = getState();
+
+  bool mpuReady = MPU6050_DMP_IsDataReady();
+  // if (!mpuReady) {
+  //   currentState = STATE_IDLE; // No valid data, go to idle
+  //   setState(currentState);
+  //   return currentState;
+  // }
+
+  float yaw = data->mpuData->euler.yaw;
+  bool irReady = IR_IsDataReady();
+  // Ball is detected by IR sensor
+  if (data->irData->ballAngle >= 0) {
+    currentState = STATE_CHASE_BALL;
+  } else {  // No ball detected - decide whether to search or align based on yaw
+    if (-YAW_THRESHOLD <= yaw && yaw <= YAW_THRESHOLD) {
+      currentState = STATE_SEARCH_BALL;
+    } else {
+      currentState = STATE_ALIGN_YAW;
+    }
+  }
+  
+  setState(currentState);
+  return currentState;
+}
+
+// TODO: using state machine to control behavior
 void soccer_ProcessData(const ModuleData_t *data) {
   // 检查紧急停止 or 系统未启动，直接返回
   if (emergencyStop || !systemStarted) {
@@ -87,97 +111,59 @@ void soccer_ProcessData(const ModuleData_t *data) {
     return;
   }
 
+  if (!MPU6050_DMP_IsDataReady()) {
+    mtrs_StopAll();  // No valid data, stop motors for safety
+    return;
+  }
+
   const float target_yaw = 0.0f;
-  updateState(data);
-  switch (getState()) {
-  case STATE_IDLE: {
-    mtrs_StopAll();
-    return;
-  }
-  case STATE_SEARCH_BALL: {
-    mtrs_StopAll();
-    return;
-  }
-  case STATE_CHASE_BALL: {
-    float ballAngle = data->irData->ballAngle;
-    // Only process if both IR and MPU data are ready
-    if (IR_IsDataReady() && MPU6050_DMP_IsDataReady() && ballAngle >= 0) {
-      float yaw = data->mpuData->euler.yaw; // Get current yaw from DMP data
-      // ver 2: use yaw correction PID
-      int yawCorr = SoccerPIDCompCorr(CORR_KD, yaw, target_yaw);
-      int spd = BASE_SPEED + BALL_CHASE_SPEED_BONUS;
+  float yaw = data->mpuData->euler.yaw;
+  float ballAngle = data->irData->ballAngle;
+  
+  float moveAngle = ballAngle;
+  float angleDrift = 0.0f;
+  const float maxValue = (float)data->irData->maxValue;
+  const float BallBigRadius = 600.0f; // R = Max eye value * tan(theta)
 
-      polarMoveWthCorr(ballAngle, (uint8_t)spd, yawCorr);
-      // polarMove(ballAngle, BASE_SPEED + BALL_CHASE_SPEED_BONUS);
-    } else {
-      mtrs_StopAll();
+  if (ballAngle >=0) {
+    int yawCorr = (int)PID_Compute(&yawCorrectPID, target_yaw, yaw);
+    int spd = BASE_SPEED + BALL_CHASE_SPEED_BONUS;
+    // TODO: angleDrift shd be small when ball is far, but can cause large angle correction when close.
+    if (15 < ballAngle && ballAngle <= 180) {
+      arm_atan2_f32(BallBigRadius, maxValue, &angleDrift);
+      moveAngle = ballAngle + angleDrift * 57.295779513f; // Convert to degrees
+    } else if (180 < ballAngle && ballAngle <= 345) {
+      arm_atan2_f32(BallBigRadius, maxValue, &angleDrift);
+      moveAngle = ballAngle - angleDrift * 57.295779513f; // Convert to degrees
+    } else {    // Ball is straight ahead, no angle correction needed
+      moveAngle = ballAngle;
     }
-    break;
-  }
-  case STATE_ALIGN_YAW: {
-    // Only adjust yaw if MPU data is ready
-    if (MPU6050_DMP_IsDataReady()) {
-      float yaw = data->mpuData->euler.yaw;
-      // ver 1: use PID to adjust yaw
-      SoccerPIDCompCar(YAW_PID_KD, yaw, target_yaw);
-    } else {
-      mtrs_StopAll();
-    }
-    break;
-  }
-  case STATE_OUT_OF_BOUNDS:{
+    polarMoveWthCorr(moveAngle, spd, yawCorr);
+  } else if (yaw < -YAW_THRESHOLD || yaw > YAW_THRESHOLD) {
+    int pidOutput = (int)PID_Compute(&yawAlignPID, target_yaw, yaw);
+    mtrs_Set4Speed(pidOutput, pidOutput, pidOutput, pidOutput);
+  } else {
     mtrs_StopAll();
-    return;
   }
+  
+  #ifdef DEBUG_SOCCER
+  static uint32_t lastDebug = 0;
+  if (HAL_GetTick() - lastDebug > 300) {  // Every 300 ms
+    bool irReady = IR_IsDataReady();
+    bool mpuReady = MPU6050_DMP_IsDataReady();
+    char msg[160];
+    snprintf(msg, sizeof(msg), 
+              "IR: rdy=%d ang=%.1f max=%d eye=%d | Yaw=%.1f MPU=%d | State=%d\r\n",
+              irReady, ballAngle, data->irData->maxValue, 
+              data->irData->maxEye, yaw, mpuReady, getState());
+    dataUart_SendString(msg);
+    lastDebug = HAL_GetTick();
   }
-}
+  #endif
 
-void SoccerPIDCompCar(float kd, float yaw, float target_yaw) {
-  // Placeholder for PID control logic
-  // Implement PID control based on yaw angle
-  float error = target_yaw - yaw;     // >0: need turn right, <0: need turn left
-  int spd = (int)(kd * error);
-
-  // set a minimum and maximum speed threshold to ensure the robot can move
-  if (spd > 0) {
-    spd = spd < BASE_SPEED ? BASE_SPEED : spd; // Minimum speed when turning right
-    spd = spd > REAL_MAX_SPEED ? REAL_MAX_SPEED : spd; // Max speed limit
-  } else if (spd < 0) {
-    spd = spd > -BASE_SPEED ? -BASE_SPEED : spd; // Minimum speed when turning left
-    spd = spd < -REAL_MAX_SPEED ? -REAL_MAX_SPEED : spd; // Max speed limit
-  }
-  mtrs_Set4Speed(spd, spd, spd, spd);
-}
-
-// kd should be smaller (larger?) than yaw PID kd
-int SoccerPIDCompCorr(float kd, float yaw, float target_yaw) {
-  // Placeholder for PID control logic
-  // Implement PID control based on corridor position
-  float error = target_yaw - yaw;   // >0: need move right, <0: need move left
-  int spd = (int)(kd * error);
-  return spd;   // >0: rotate right, <0: rotate left
-}
-
-void setState(State_t newState) { state = newState; }
-State_t getState() { return state; }
-State_t updateState(const ModuleData_t *data) {
-  State_t state = getState();
-  // Check IR data first - highest priority
-  if (IR_IsDataReady() && data->irData->ballAngle >= 0) {
-    state = STATE_CHASE_BALL;
-  } else if (MPU6050_DMP_IsDataReady()) {
-    // Only check MPU data if it's ready
-    float yaw = data->mpuData->euler.yaw;  // Get yaw angle from DMP
-    // yaw: +right, -left
-    if (-YAW_THRESHOLD < yaw && yaw < YAW_THRESHOLD) {
-      state = STATE_SEARCH_BALL;
-    } else {
-      state = STATE_ALIGN_YAW;
-    }
-  }
-  // If no data is ready, keep current state
-  setState(state);
-  return state;
+  // Clear data ready flags after processing (independent flags)
+  if (IR_IsDataReady()) { IR_ClearDataReady(); }
+  if (MPU6050_DMP_IsDataReady()) { MPU6050_DMP_ClearReady(); }
 }
 
 // 添加等待启动的函数
