@@ -2,7 +2,38 @@
 
 這是一個基於 STM32H750 微控制器的主控板韌體專案，用於控制多馬達機器人系統並整合 IR 感測器陣列。
 
-## 🎉 最新更新 (v2.7.0 - 2026-02-06)
+## 🎉 最新更新 (v2.8.0 - 2026-02-15)
+
+### 🚀 系統 Bootloader 跳轉功能
+
+- **按鈕控制啟動模式**：透過 BTN_4 控制系統啟動方式
+  - **不按 BTN_4 啟動** → 從 Flash 運行正常程序
+  - **按住 BTN_4 啟動** → 自動跳轉到系統 Bootloader
+- **完整的系統重置**：跳轉前完整清理系統狀態
+  - 禁用並清理 DCache 和 ICache
+  - 禁用 MPU（記憶體保護單元）
+  - 清除所有中斷使能和掛起標誌
+  - 重置向量表偏移寄存器（VTOR）
+  - 設置 Bootloader 的堆疊指標
+- **最早期檢測**：在任何系統初始化前檢查按鈕狀態
+  - 避免 IWDG 看門狗衝突
+  - 避免外設初始化干擾
+  - 確保 Bootloader 獲得乾淨的系統狀態
+- **運行時重啟**：按鈕 4 長按可重啟系統
+  - 配合按住按鈕可從 Flash 重啟
+  - 適用於韌體更新後的快速重載
+- **STM32H750 專用優化**：針對 STM32H750 的 Bootloader 地址（0x1FF09800）
+- **應用場景**：
+  - USB DFU 韌體更新
+  - UART 韌體燒錄
+  - 系統恢復模式
+  - 工廠測試模式
+
+詳見 [Doc/BOOTLOADER_USAGE.md](Doc/BOOTLOADER_USAGE.md)
+
+---
+
+## 📜 歷史更新 (v2.7.0 - 2026-02-06)
 
 ### 🐕 看門狗保護系統
 
@@ -239,6 +270,21 @@
   - `LONG_PRESS_HOLD`: 長按保持
 - **系統整合**：與足球機器人控制系統完全整合
 - **調試支持**：完整的 UART 調試輸出和狀態監控
+
+### 8. **系統 Bootloader 跳轉** 🆕
+
+- **按鈕控制啟動模式**：通過 BTN_4 選擇運行模式
+  - 按住啟動 → 從 Flash 運行應用程序
+  - 不按啟動 → 跳轉到系統 Bootloader
+- **完整的系統重置**：跳轉前清理所有硬件狀態
+  - 禁用並清理 DCache 和 ICache
+  - 禁用 MPU（內存保護單元）
+  - 清除所有 NVIC 中斷
+  - 重置向量表偏移寄存器
+- **運行時重啟**：長按 BTN_4 可重啟系統
+- **固件更新支持**：支持 USB DFU、UART 等接口更新固件
+- **STM32H750 優化**：針對 STM32H750 的 Bootloader 地址（0x1FF09800）
+- 詳見 [Doc/BOOTLOADER_USAGE.md](Doc/BOOTLOADER_USAGE.md)
 
 ## 📁 專案結構
 
@@ -997,6 +1043,7 @@ PWM: 420 (42.0%)
 
 ## 📖 相關文件
 
+- [BOOTLOADER_USAGE.md](Doc/BOOTLOADER_USAGE.md) - 🆕 系統 Bootloader 跳轉使用指南
 - [DEBUG_SYSTEM.md](Doc/DEBUG_SYSTEM.md) - 🆕 調試系統使用指南
 - [I2C_COMMON_USAGE.md](Doc/I2C_COMMON_USAGE.md) - 通用 I2C 狀態機使用指南
 - [I2C_Communication_Setup_Guide.md](Doc/I2C_Communication_Setup_Guide.md) - I2C 硬體與軟體設定詳解

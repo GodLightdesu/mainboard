@@ -70,6 +70,76 @@ static void MPU_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/**
+  * @brief  Jump to system bootloader
+  * @note   This function will jump to the STM32 system bootloader
+  *         For STM32H750, bootloader is located at 0x1FF09800
+  * @retval None
+  */
+void JumpToBootloader(void)
+{
+  /* Define bootloader address for STM32H750 */
+  #define BOOTLOADER_ADDRESS 0x1FF09800
+  
+  void (*SysMemBootJump)(void);
+  
+  /* Disable all interrupts */
+  __disable_irq();
+  
+  /* Disable SysTick */
+  SysTick->CTRL = 0;
+  SysTick->LOAD = 0;
+  SysTick->VAL = 0;
+  
+  /* Disable GPIOD clock that was enabled for button check */
+  RCC->AHB4ENR &= ~RCC_AHB4ENR_GPIODEN;
+  
+  /* Disable and clean data cache */
+  #if (__DCACHE_PRESENT == 1U)
+  SCB_DisableDCache();
+  #endif
+  
+  /* Disable and invalidate instruction cache */
+  #if (__ICACHE_PRESENT == 1U)
+  SCB_DisableICache();
+  SCB_InvalidateICache();
+  #endif
+  
+  /* Disable MPU */
+  HAL_MPU_Disable();
+  
+  /* Clear all interrupt enable registers & pending interrupts */
+  for (uint32_t i = 0; i < 8; i++)
+  {
+    NVIC->ICER[i] = 0xFFFFFFFF;  /* Disable all interrupts */
+    NVIC->ICPR[i] = 0xFFFFFFFF;  /* Clear all pending interrupts */
+  }
+  
+  /* Reset all interrupt priorities */
+  for (uint32_t i = 0; i < 8; i++)
+  {
+    NVIC->IP[i] = 0x00000000;
+  }
+  
+  /* Reset vector table offset register */
+  SCB->VTOR = 0x00000000;
+  
+  /* Set main stack pointer to bootloader's initial stack pointer */
+  __set_MSP(*(uint32_t *)BOOTLOADER_ADDRESS);
+  
+  /* Get bootloader reset handler address */
+  SysMemBootJump = (void (*)(void)) (*((uint32_t *)(BOOTLOADER_ADDRESS + 4)));
+  
+  /* Enable all interrupts before jumping */
+  __enable_irq();
+  
+  /* Call the bootloader reset handler */
+  SysMemBootJump();
+  
+  /* Jump is done successfully, this should not be reached */
+  while (1);
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -80,9 +150,34 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  /* Early button check BEFORE any system configuration */
+  /* Enable GPIOD clock manually (RCC->AHB4ENR bit 3 for GPIOD) */
+  RCC->AHB4ENR |= RCC_AHB4ENR_GPIODEN;
+  /* Small delay for clock stabilization */
+  for(volatile uint32_t i = 0; i < 1000; i++);
+  
+  /* Configure BTN_4 (PD2) as input with pull-up */
+  /* MODER: 00 for input (clear bits 5:4) */
+  GPIOD->MODER &= ~(0x3U << (2 * 2));
+  /* PUPDR: 01 for pull-up (set bit 4, clear bit 5) */
+  GPIOD->PUPDR &= ~(0x3U << (2 * 2));
+  GPIOD->PUPDR |= (0x1U << (2 * 2));
+  
+  /* Wait for GPIO to stabilize */
+  for(volatile uint32_t i = 0; i < 10000; i++);
+  
+  /* Check if BTN_4 is pressed (IDR bit 2) */
+  /* Button pressed = 0 (low), Button not pressed = 1 (high) */
+  if ((GPIOD->IDR & GPIO_PIN_2) == 0) {
+    /* BTN_4 not pressed - Jump to bootloader immediately */
+    /* System is in clean state - only RCC clock enabled */
+    JumpToBootloader();
+  }
+  /* BTN_4 is pressed - Continue running from flash */
+  
   /* Power-on delay to allow capacitors to stabilize */
   /* TEMPORARILY DISABLED FOR DEBUGGING - Re-enable after confirming flash works */
-  // for(volatile uint32_t i = 0; i < POWER_ON_DELAY_CYCLES; i++);
+  for(volatile uint32_t i = 0; i < POWER_ON_DELAY_CYCLES; i++);
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -221,7 +316,7 @@ int main(void)
     }
 
     /* Update all sensor data */
-    updateData();
+    // updateData();
 
     /* Print MPU6050 Euler angles */
     #ifdef DEBUG_MPU6050_DMP
@@ -234,7 +329,10 @@ int main(void)
     #endif
 
     /* Process data in soccer module */
-    soccer_ProcessData(&moduleData);
+    // soccer_ProcessData(&moduleData);
+
+    mtrs_Set4Speed(0, 0, 0, 100);
+    // polarMove(0, 40);
     
     HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */

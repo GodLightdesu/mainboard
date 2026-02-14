@@ -28,6 +28,8 @@
 #define YAW_THRESHOLD 10.0f             /**< Yaw angle threshold for stopping correction (degrees) */
 #define INTEGRAL_LIMIT 500.0f           /**< Maximum integral accumulation for anti-windup */
 
+#define POSSIBLE_MAX_BALL_VALUE 2500 /**< Maximum possible value from IR sensor when ball is very close, used for angle correction calculation */
+
 typedef enum {
   STATE_IDLE = 0,        /**< Robot stopped, waiting for commands */
   STATE_SEARCH_BALL,     /**< Rotating to search for ball */

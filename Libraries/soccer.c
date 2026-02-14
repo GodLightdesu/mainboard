@@ -43,7 +43,10 @@ static void SoccerButtonControl(uint8_t btn_index, BtnEvent_t event) {
     } break;
   case 3: // 按钮4 - Reset All
     if (event == BTN_EVENT_LONG_PRESS_START) {
-      
+      // 长按重启系统（从flash运行）
+      dataUart_SendString("System Reset - Running from Flash...\r\n");
+      HAL_Delay(100);  // 让消息发送完成
+      NVIC_SystemReset();  // 系统重启
     } break;
   }
 }
@@ -130,10 +133,10 @@ void soccer_ProcessData(const ModuleData_t *data) {
     int spd = BASE_SPEED + BALL_CHASE_SPEED_BONUS;
     // TODO: angleDrift shd be small when ball is far, but can cause large angle correction when close.
     if (15 < ballAngle && ballAngle <= 180) {
-      arm_atan2_f32(BallBigRadius, maxValue, &angleDrift);
+      arm_atan2_f32(BallBigRadius, POSSIBLE_MAX_BALL_VALUE-maxValue, &angleDrift);
       moveAngle = ballAngle + angleDrift * 57.295779513f; // Convert to degrees
     } else if (180 < ballAngle && ballAngle <= 345) {
-      arm_atan2_f32(BallBigRadius, maxValue, &angleDrift);
+      arm_atan2_f32(BallBigRadius, POSSIBLE_MAX_BALL_VALUE-maxValue, &angleDrift);
       moveAngle = ballAngle - angleDrift * 57.295779513f; // Convert to degrees
     } else {    // Ball is straight ahead, no angle correction needed
       moveAngle = ballAngle;
