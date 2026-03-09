@@ -80,6 +80,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/Module/Xsound/xsound.c # 声音模块
     Libraries/Module/Encoder/encoder.c # 编码器模块
     Libraries/Module/Motors/motors.c # 电机控制
+    Libraries/Module/Grayscale/grayscale.c # 灰度传感器
     Libraries/Module/IR/ir.c # 红外传感器
     Libraries/PID/PID.c # PID控制器
     Libraries/soccer.c # 主控制逻辑
@@ -104,6 +105,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/Module/Xsound # 声音模块头文件
     Libraries/Module/Motors # 电机控制头文件
     Libraries/Module/Encoder # 编码器头文件
+    Libraries/Module/Grayscale # 灰度传感器头文件
     Libraries/Uart # UART相关头文件
     Libraries/I2C # I2C相关头文件
     Libraries/ # 库根目录

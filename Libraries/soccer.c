@@ -60,7 +60,7 @@ void SoccerInit(void) {
   
   // 初始化PID控制器
   PID_Init(&yawAlignPID, YAW_PID_kp, YAW_PID_ki, YAW_PID_kd, 
-           INTEGRAL_LIMIT, -BASE_SPEED, BASE_SPEED);
+           INTEGRAL_LIMIT, -45, 45);
   PID_Init(&yawCorrectPID, CORR_kp, CORR_ki, CORR_kd,
            INTEGRAL_LIMIT, -BASE_SPEED, BASE_SPEED);
 }

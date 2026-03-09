@@ -38,6 +38,7 @@
 #include "motors.h"
 #include "button.h"
 #include "soccer.h"
+#include "grayscale.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -152,27 +153,27 @@ int main(void)
   /* USER CODE BEGIN 1 */
   /* Early button check BEFORE any system configuration */
   /* Enable GPIOD clock manually (RCC->AHB4ENR bit 3 for GPIOD) */
-  RCC->AHB4ENR |= RCC_AHB4ENR_GPIODEN;
-  /* Small delay for clock stabilization */
-  for(volatile uint32_t i = 0; i < 1000; i++);
+  // RCC->AHB4ENR |= RCC_AHB4ENR_GPIODEN;
+  // /* Small delay for clock stabilization */
+  // for(volatile uint32_t i = 0; i < 1000; i++);
   
-  /* Configure BTN_4 (PD2) as input with pull-up */
-  /* MODER: 00 for input (clear bits 5:4) */
-  GPIOD->MODER &= ~(0x3U << (2 * 2));
-  /* PUPDR: 01 for pull-up (set bit 4, clear bit 5) */
-  GPIOD->PUPDR &= ~(0x3U << (2 * 2));
-  GPIOD->PUPDR |= (0x1U << (2 * 2));
+  // /* Configure BTN_4 (PD2) as input with pull-up */
+  // /* MODER: 00 for input (clear bits 5:4) */
+  // GPIOD->MODER &= ~(0x3U << (2 * 2));
+  // /* PUPDR: 01 for pull-up (set bit 4, clear bit 5) */
+  // GPIOD->PUPDR &= ~(0x3U << (2 * 2));
+  // GPIOD->PUPDR |= (0x1U << (2 * 2));
   
-  /* Wait for GPIO to stabilize */
-  for(volatile uint32_t i = 0; i < 10000; i++);
+  // /* Wait for GPIO to stabilize */
+  // for(volatile uint32_t i = 0; i < 10000; i++);
   
-  /* Check if BTN_4 is pressed (IDR bit 2) */
-  /* Button pressed = 0 (low), Button not pressed = 1 (high) */
-  if ((GPIOD->IDR & GPIO_PIN_2) == 0) {
-    /* BTN_4 not pressed - Jump to bootloader immediately */
-    /* System is in clean state - only RCC clock enabled */
-    JumpToBootloader();
-  }
+  // /* Check if BTN_4 is pressed (IDR bit 2) */
+  // /* Button pressed = 0 (low), Button not pressed = 1 (high) */
+  // if ((GPIOD->IDR & GPIO_PIN_2) == 0) {
+  //   /* BTN_4 not pressed - Jump to bootloader immediately */
+  //   /* System is in clean state - only RCC clock enabled */
+  //   JumpToBootloader();
+  // }
   /* BTN_4 is pressed - Continue running from flash */
   
   /* Power-on delay to allow capacitors to stabilize */
@@ -205,14 +206,13 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_I2C3_Init();
   MX_I2C2_Init();
+  MX_I2C3_Init();
   MX_UART4_Init();
   MX_UART5_Init();
   MX_UART7_Init();
   MX_UART8_Init();
   MX_ADC1_Init();
-  MX_ADC2_Init();
   MX_ADC3_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
@@ -222,13 +222,15 @@ int main(void)
   MX_IWDG1_Init();
   /* USER CODE BEGIN 2 */
   /* Initialize status LEDs */
-  HAL_GPIO_WritePin(GPIOD, LED_2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOD, LED_1_Pin | LED_2_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, LED_3_Pin | LED_4_Pin, GPIO_PIN_SET);
 
   /* Initialize application modules */
   dataUart_Init(&huart4);    /* UART for data output */
 
-  HAL_Delay(I2C_INIT_DELAY_MS);  // wait 10ms
+  HAL_Delay(I2C_INIT_DELAY_MS); // wait 10ms
+
+  grayscaleInit(); /* Initialize grayscale sensors */
 
   /* Initialize I2C bus manager for shared I2C3 peripheral */
   I2C_BusManager_t i2c3_bus;
@@ -312,11 +314,12 @@ int main(void)
     /* Status LED heartbeat (non-blocking) */
     if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
       HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
+      // dataUart_SendString("Heartbeat - System is alive\r\n");
       lastLedToggleTime = currentTime;
     }
 
     /* Update all sensor data */
-    // updateData();
+    updateData();
 
     /* Print MPU6050 Euler angles */
     #ifdef DEBUG_MPU6050_DMP
@@ -328,10 +331,19 @@ int main(void)
     }
     #endif
 
+    char msg[100];
+    int offset = snprintf(msg, sizeof(msg), "Grayscale: ");
+    for (int i = 0; i < GRAYSCALE_NUM; i++) {
+      uint16_t value = getGrayscaleValue(i);
+      offset += snprintf(msg + offset, sizeof(msg) - offset, "%u ", value);
+    }
+    snprintf(msg + offset, sizeof(msg) - offset, "\r\n");
+    dataUart_SendString(msg);
+
     /* Process data in soccer module */
     // soccer_ProcessData(&moduleData);
 
-    mtrs_Set4Speed(0, 0, 0, 100);
+    // mtrs_Set4Speed(0, 0, 0, 100);
     // polarMove(0, 40);
     
     HAL_Delay(MAIN_LOOP_DELAY_MS);
@@ -357,7 +369,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
@@ -371,7 +383,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 30;
+  RCC_OscInitStruct.PLL.PLLN = 60;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -391,12 +403,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }

@@ -12,18 +12,18 @@
 #include "iwdg.h"
 
 /* Soccer control constants */
-#define REAL_MAX_SPEED 80               /**< Maximum motor speed */
-#define BASE_SPEED 30                   /**< Base motor speed */
+#define REAL_MAX_SPEED 65               /**< Maximum motor speed */
+#define BASE_SPEED 35                   /**< Base motor speed */
 #define BALL_CHASE_SPEED_BONUS 25       /**< Additional speed when chasing ball */
 /* Yaw Alignment PID - 用於原地旋轉對齊 */
-#define YAW_PID_kp 0.25f      // 提高響應速度
+#define YAW_PID_kp 0.25f    // 提高響應速度
 #define YAW_PID_ki 0.0f     // 降低積分避免超調
-#define YAW_PID_kd 2.0f      // 增加阻尼穩定性
+#define YAW_PID_kd 2.0f     // 增加阻尼穩定性
 
 /* Corridor Correction PID - 用於追球時的偏航修正 */
-#define CORR_kp 0.25f         // 稍微提高修正力度
+#define CORR_kp 0.25f      // 稍微提高修正力度
 #define CORR_ki 0.f        // 降低積分避免振盪
-#define CORR_kd 2.0f         // 增加阻尼穩定性
+#define CORR_kd 2.0f       // 增加阻尼穩定性
 
 #define YAW_THRESHOLD 10.0f             /**< Yaw angle threshold for stopping correction (degrees) */
 #define INTEGRAL_LIMIT 500.0f           /**< Maximum integral accumulation for anti-windup */
