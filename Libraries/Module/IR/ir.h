@@ -1,9 +1,6 @@
 #ifndef IR_H
 #define IR_H
 
-/* Debug output control*/
-#define IR_DEBUG
-
 /* Configuration constants */
 #define EYE_NUM 7               /**< Number of IR sensors per slave */
 #define IR_SLAVES_NO 2          /**< Number of I2C slave devices */

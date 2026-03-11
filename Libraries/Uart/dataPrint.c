@@ -1,4 +1,5 @@
 #include "dataPrint.h"
+#include "xsound.h"
 
 static UART_HandleTypeDef *dataUart_huart = NULL;
 
@@ -134,6 +135,22 @@ void dataUart_PrintIRData(const IR_t *IR_Module) {
    int len = snprintf(outputStr, sizeof(outputStr), 
                      "Eye:%d Val:%d ballAngle:%f \r\n", 
                      IR_Module->maxEye, IR_Module->maxValue, IR_Module->ballAngle);
+  if (len > 0 && len < (int)sizeof(outputStr)) {
+    HAL_UART_Transmit(dataUart_huart, (uint8_t*)outputStr, len, 100);
+  }
+#endif
+}
+
+// Xsound debug functions
+void dataUart_PrintXsoundData(const Xsound_t *xsound) {
+#ifdef DEBUG_XS
+  if (dataUart_huart == NULL || xsound == NULL) return;
+  
+  char outputStr[200];
+  int len = snprintf(outputStr, sizeof(outputStr), 
+                     "Xsound: D0=%.2f D1=%.2f D2=%.2f D3=%.2f\r\n", 
+                     xsound->distances[0], xsound->distances[1], 
+                     xsound->distances[2], xsound->distances[3]);
   if (len > 0 && len < (int)sizeof(outputStr)) {
     HAL_UART_Transmit(dataUart_huart, (uint8_t*)outputStr, len, 100);
   }

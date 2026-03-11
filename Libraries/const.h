@@ -25,11 +25,17 @@
 #define GRAYSCALE_BUFFER_SIZE 10  /**< Buffer size: 5 sensors * 2 bytes each */
 #define GRAYSCALE_RXBUF_PTR ((uint16_t *)(DMA_BUFFER_ADDRESS + (3 * DMA_CACHE_LINE_SIZE)))
 
-/* Total DMA buffer layout (128 bytes, 4 cache lines):
+/* Xsound - aligned to 32-byte boundary */
+#define XSOUND_SAMPLE_PERIOD_MS 50U
+#define XSOUND_BUFFER_SIZE 16   /**< Buffer size: 4 float distance values * 4 bytes each */
+#define XSOUND_RXBUF_PTR ((uint8_t *)(DMA_BUFFER_ADDRESS + (4 * DMA_CACHE_LINE_SIZE)))
+
+/* Total DMA buffer layout (160 bytes, 5 cache lines):
 0x30000000 - 0x3000001F (0-31):    IR_SLAVE1    (16 bytes, padded to 32)
 0x30000020 - 0x3000003F (32-63):   IR_SLAVE2    (16 bytes, padded to 32)
 0x30000040 - 0x3000005F (64-95):   MPU6050      (14 bytes, padded to 32)
 0x30000060 - 0x3000007F (96-127):  GRAYSCALE    (10 bytes, padded to 32)
+0x30000080 - 0x3000009F (128-159): XSOUND       (16 bytes, padded to 32)
 */
 
 #endif

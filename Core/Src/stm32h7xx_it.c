@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "ir.h"
 #include "button.h"
+#include "xsound.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -328,6 +329,7 @@ void ADC3_IRQHandler(void)
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_RxCallback(hi2c);
+  Xsound_RxCallback(hi2c);
   // MPU6050_RxCallback(hi2c); // Not used with new MPU6050DMP library
 }
 
@@ -337,6 +339,7 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_RxCallback(hi2c);
+  Xsound_RxCallback(hi2c);
   // MPU6050_RxCallback(hi2c); // Not used with new MPU6050DMP library
 }
 
@@ -346,6 +349,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
   /* Dispatch to appropriate module based on I2C peripheral */
   IR_ErrorCallback(hi2c);
+  Xsound_ErrorCallback(hi2c);
   // MPU6050_ErrorCallback(hi2c); // Not used with new MPU6050DMP library
 }
 

@@ -75,6 +75,9 @@ void updateData() {
   
   // IR sensor update (non-blocking, uses internal state machine and flags)
   IR_Process();
+  
+  // Xsound sensor update (non-blocking, uses internal state machine and flags)
+  Xsound_Process();
 }
 
 void setState(State_t newState) { state = newState; }

@@ -7,6 +7,7 @@
 #include "motors.h"
 #include "MPU6050DMP.h"
 #include "PID.h"
+#include "xsound.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include "iwdg.h"
@@ -45,6 +46,7 @@ typedef enum {
 typedef struct {
   const IR_t *irData;
   const MPU6050_DMP_t *mpuData;
+  const Xsound_t *xsoundData;
   // Add new module pointers here as needed
 } ModuleData_t;
 

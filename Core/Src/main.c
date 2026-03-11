@@ -39,6 +39,7 @@
 #include "button.h"
 #include "soccer.h"
 #include "grayscale.h"
+#include "xsound.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -242,6 +243,9 @@ int main(void)
   // IR_SetSlaveEnabled(IR_SLAVE_1, false);
   // IR_SetSlaveEnabled(IR_SLAVE_2, false);
   
+  /* Initialize Xsound sensor module with I2C peripheral */
+  Xsound_Init(&hi2c3);
+  
   /* Check for I2C devices before initializing (optional debugging) */
   // I2C_Find(&hi2c3, IR_GetSlaveAddress(IR_SLAVE_1));
   // I2C_Find(&hi2c3, IR_GetSlaveAddress(IR_SLAVE_2));
@@ -267,13 +271,16 @@ int main(void)
   /* Cache module data pointers for efficiency */
   static const IR_t *irDataPtr;
   static const MPU6050_DMP_t *mpuDataPtr;
+  static const Xsound_t *xsoundDataPtr;
   irDataPtr = IR_GetData();
   mpuDataPtr = MPU6050DMP_GetData();
+  xsoundDataPtr = Xsound_GetData();
 
   /* Create module data struct once */
   static ModuleData_t moduleData;
   moduleData.irData = irDataPtr;
   moduleData.mpuData = mpuDataPtr;
+  moduleData.xsoundData = xsoundDataPtr;
 
   // Button
   Button_Init();
@@ -331,14 +338,14 @@ int main(void)
     }
     #endif
 
-    char msg[100];
-    int offset = snprintf(msg, sizeof(msg), "Grayscale: ");
-    for (int i = 0; i < GRAYSCALE_NUM; i++) {
-      uint16_t value = getGrayscaleValue(i);
-      offset += snprintf(msg + offset, sizeof(msg) - offset, "%u ", value);
-    }
-    snprintf(msg + offset, sizeof(msg) - offset, "\r\n");
-    dataUart_SendString(msg);
+    // char msg[100];
+    // int offset = snprintf(msg, sizeof(msg), "Grayscale: ");
+    // for (int i = 0; i < GRAYSCALE_NUM; i++) {
+    //   uint16_t value = getGrayscaleValue(i);
+    //   offset += snprintf(msg + offset, sizeof(msg) - offset, "%u ", value);
+    // }
+    // snprintf(msg + offset, sizeof(msg) - offset, "\r\n");
+    // dataUart_SendString(msg);
 
     /* Process data in soccer module */
     // soccer_ProcessData(&moduleData);

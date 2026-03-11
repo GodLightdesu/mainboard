@@ -11,6 +11,8 @@
 // Forward declaration to avoid circular include
 struct Button_t;
 typedef struct Button_t Button_t;
+struct Xsound_t;
+typedef struct Xsound_t Xsound_t;
 
 void dataUart_Init(UART_HandleTypeDef *huart);
 void dataUart_SendString(const char *str);
@@ -22,6 +24,9 @@ void dataUart_PrintInitError(const char *errorMsg, int statusCode);
 // IR debug functions
 HAL_StatusTypeDef ParseAndDisplayIRData(const uint8_t *data, uint16_t size);
 void dataUart_PrintIRData(const IR_t *IR_Module);
+
+// Xsound debug functions
+void dataUart_PrintXsoundData(const Xsound_t *xsound);
 
 // Motor debug functions
 void dataUart_PrintMotorTest(int motorId);
