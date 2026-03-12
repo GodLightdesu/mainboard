@@ -1,16 +1,20 @@
 #ifndef SOCCER_H
 #define SOCCER_H
 
-#include "ir.h"
-#include "button.h"
-#include "dataPrint.h"
-#include "motors.h"
-#include "MPU6050DMP.h"
-#include "PID.h"
-#include "xsound.h"
 #include <stdbool.h>
-#include <stdint.h>
+
 #include "iwdg.h"
+#include "arm_math.h"
+#include "dataPrint.h"
+#include "const.h"
+
+#include "ir.h"
+#include "PID.h"
+#include "button.h"
+#include "motors.h"
+#include "xsound.h"
+#include "grayscale.h"
+#include "MPU6050DMP.h"
 
 /* Soccer control constants */
 #define REAL_MAX_SPEED 65               /**< Maximum motor speed */
@@ -31,6 +35,11 @@
 
 #define POSSIBLE_MAX_BALL_VALUE 2500 /**< Maximum possible value from IR sensor when ball is very close, used for angle correction calculation */
 
+/* Angle correction thresholds for ball chasing */
+#define ANGLE_CORR_MIN_THRESHOLD 15.0f   /**< Minimum angle for correction (degrees) */
+#define ANGLE_CORR_MAX_THRESHOLD 345.0f  /**< Maximum angle for correction (degrees) */
+#define ANGLE_HALF_CIRCLE 180.0f         /**< Half circle angle (degrees) */
+
 typedef enum {
   STATE_IDLE = 0,        /**< Robot stopped, waiting for commands */
   STATE_SEARCH_BALL,     /**< Rotating to search for ball */
@@ -47,6 +56,7 @@ typedef struct {
   const IR_t *irData;
   const MPU6050_DMP_t *mpuData;
   const Xsound_t *xsoundData;
+  const Grayscale_t *grayscaleData;
   // Add new module pointers here as needed
 } ModuleData_t;
 

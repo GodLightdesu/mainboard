@@ -6,6 +6,14 @@
 #define IR_SAMPLE_PERIOD_MS     20U
 #define MAIN_LOOP_DELAY_MS      10U
 
+/* Debug and timing constants */
+#define DEBUG_PRINT_INTERVAL_MS     300U
+#define LONG_PRESS_HOLD_REPORT_MS   500U
+#define LED_WAIT_BLINK_MS           500U
+#define UART_CHAR_TIMEOUT_MS        50U
+#define UART_BUFFER_TIMEOUT_MS      500U
+#define MPU6050_INIT_RETRY_DELAY_MS 100U
+
 /* I2C timing */
 #define I2C_INIT_DELAY_MS       10U
 
@@ -37,5 +45,20 @@
 0x30000060 - 0x3000007F (96-127):  GRAYSCALE    (10 bytes, padded to 32)
 0x30000080 - 0x3000009F (128-159): XSOUND       (16 bytes, padded to 32)
 */
+
+/* Mathematical constants */
+#ifndef PI
+#define PI 3.14159265358979323846f
+#endif
+#define PI_DIV_4   0.785398163397448f     /**< PI/4 precomputed for phase offset calculations */
+#define DEG_TO_RAD 0.017453292519943295f  /**< PI/180 for degree to radian conversion */
+#define RAD_TO_DEG 57.295779513082320877f /**< 180/PI for radian to degree conversion */
+
+/* Utility macros */
+/**
+ * @brief Calculate time difference handling 32-bit overflow
+ * @note HAL_GetTick() overflows after ~49.7 days, this macro handles it correctly
+ */
+#define TIME_DIFF(now, prev) ((uint32_t)((now) - (prev)))
 
 #endif

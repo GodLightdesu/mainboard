@@ -4,26 +4,23 @@
 /* Configuration constants */
 #define EYE_NUM 7               /**< Number of IR sensors per slave */
 #define IR_SLAVES_NO 2          /**< Number of I2C slave devices */
+#define TOTAL_IR_SENSORS 14     /**< Total number of IR sensors (EYE_NUM * IR_SLAVES_NO) */
 
 /* Ball detection threshold */
-#define IR_DETECTION_THRESHOLD 100  /**< Minimum signal strength to consider ball detected */
-
-/* Mathematical constants */
-#ifndef PI
-#define PI 3.14159265358979323846f
-#endif
+#define IR_DETECTION_THRESHOLD 50  /**< Minimum signal strength to consider ball detected (lower = farther detection) */
 
 /* I2C slave addresses */
 #define IR_SLAVE_1_ADDR (0x30 << 1)
 #define IR_SLAVE_2_ADDR (0x31 << 1)
 
-#include "i2c_common.h"
-#include "arm_math.h"
-#include "const.h"
-#include "usart.h"
-#include <stdio.h>
+#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "const.h"
+#include "arm_math.h"
+#include "dataPrint.h"
+#include "i2c_common.h"
 
 /** Slave device identifiers */
 typedef enum { 

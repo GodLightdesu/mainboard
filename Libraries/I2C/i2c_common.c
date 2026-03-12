@@ -1,5 +1,4 @@
 #include "i2c_common.h"
-#include "dataPrint.h"
 
 /* Global bus managers (support up to 4 I2C peripherals) */
 #define MAX_I2C_BUSES 4
@@ -22,6 +21,11 @@ void I2C_Bus_Init(I2C_BusManager_t *manager, I2C_HandleTypeDef *hi2c) {
   if (busManagerCount < MAX_I2C_BUSES) {
     busManagers[busManagerCount] = *manager;
     busManagerCount++;
+  } else {
+    /* Error: Too many I2C buses registered */
+    #ifdef DEBUG_I2C
+    dataUart_PrintI2CError("I2C_Bus_Init: MAX_I2C_BUSES exceeded", busManagerCount, 0xFF);
+    #endif
   }
 }
 
@@ -41,23 +45,19 @@ bool I2C_Bus_TryAcquire(I2C_BusManager_t *manager) {
   if (manager == NULL) return false;
   
   __disable_irq();
-  
-  /* Check if bus is free */
   if (!manager->locked) {
     manager->locked = true;
     __enable_irq();
     return true;
   }
-  
   __enable_irq();
-  return false;  /* Bus is owned by another module */
+  return false;
 }
 
 void I2C_Bus_Release(I2C_BusManager_t *manager) {
   if (manager == NULL) return;
   
   __disable_irq();
-  
   manager->locked = false;
   __enable_irq();
 }
@@ -118,8 +118,24 @@ bool I2C_Module_ReadSlave(I2C_Module_t *module, uint8_t slaveId) {
     
     HAL_StatusTypeDef status = HAL_ERROR;  /* Initialize to error state */
     
+    /* Validate buffers before DMA operations */
+    if (slave->rxBuffer == NULL || slave->bufferSize == 0) {
+      __disable_irq();
+      module->state = I2C_STATE_ERROR;
+      module->activeSlaveId = 0xFF;
+      __enable_irq();
+      break;
+    }
+    
     /* If txSize == 1, use Mem_Read (register read with repeated start) */
-    if (slave->txSize == 1 && slave->txBuffer != NULL) {
+    if (slave->txSize == 1) {
+      if (slave->txBuffer == NULL) {
+        __disable_irq();
+        module->state = I2C_STATE_ERROR;
+        module->activeSlaveId = 0xFF;
+        __enable_irq();
+        break;
+      }
       uint8_t regAddr = slave->txBuffer[0];
       status = HAL_I2C_Mem_Read_DMA(
         module->hi2c,
@@ -297,12 +313,17 @@ void I2C_Module_RxCallback(I2C_Module_t *module, I2C_HandleTypeDef *hi2c) {
   
   #ifdef DEBUG_I2C
   /* Debug: Confirm RX callback is called */
-  static uint32_t rxCount = 0;
-  rxCount++;
-  if (rxCount % 50 == 0) {
-    char msg[40];
-    snprintf(msg, sizeof(msg), "RxCallback: %u", (unsigned int)rxCount);
-    dataUart_PrintI2CStatus(msg);
+  if (module->activeSlaveId < module->slaveCount) {
+    static uint32_t rxCount[8] = {0};  /* Support up to 8 slaves */
+    uint8_t sid = module->activeSlaveId;
+    if (sid < 8) {
+      rxCount[sid]++;
+      #ifdef DEBUG_I2C
+      if (rxCount[sid] % 50 == 0) {
+        printf("RxCallback S%u: %lu\r\n", sid, (unsigned long)rxCount[sid]);
+      }
+      #endif
+    }
   }
   #endif
   
@@ -368,8 +389,14 @@ uint16_t I2C_Scan(I2C_HandleTypeDef *hi2c) {
 
 bool I2C_Module_SetSlaveEnabled(I2C_Module_t *module, uint8_t slaveId, bool enable) {
   if (module == NULL || slaveId >= module->slaveCount) return false;
+  if (module->slaves == NULL) return false;
   
   module->slaves[slaveId].enabled = enable;
+  
+  #ifdef DEBUG_I2C
+  dataUart_PrintI2CStatus(enable ? "Slave enabled" : "Slave disabled");
+  #endif
+  
   return true;
 }
 

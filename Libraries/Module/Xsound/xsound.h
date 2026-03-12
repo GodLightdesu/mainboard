@@ -7,10 +7,20 @@
 /* I2C slave address */
 #define XSOUND_ADDR (0x50 << 1)
 
-#include "i2c_common.h"
+#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
+
+#include "const.h"
+#include "dataPrint.h"
+#include "i2c_common.h"
+
+/* Sensor ID mapping:
+0: back
+1: right
+2: left
+3: front
+*/
 
 /**
  * @brief Xsound module structure

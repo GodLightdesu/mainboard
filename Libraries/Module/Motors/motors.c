@@ -1,5 +1,4 @@
 #include "motors.h"
-#include "dataPrint.h"
 
 static Mtr mtrs[MOTOR_COUNT] = {
   { &htim1, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 0 (Front Left)
@@ -7,6 +6,17 @@ static Mtr mtrs[MOTOR_COUNT] = {
   { &htim3, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP },  // Motor 2 (Rear Left)
   { &htim4, TIM_CHANNEL_4, TIM_CHANNEL_3, FAST_DECAY, 0, STOP }   // Motor 3 (Rear Right)
 };
+
+/* Speed mapping function - converts 0-100 speed to PWM pulse width
+ * This ensures motor always gets sufficient voltage to overcome static friction
+ * Formula: pulse = PWM_STARTUP_MIN + (speed/100) * (PWM_MAX_VALUE - PWM_STARTUP_MIN) 
+ * Marked as inline for performance in frequently called path */
+static inline uint32_t spd_Map(uint8_t speed) {
+  if (speed == 0) return 0;
+  if (speed > MAX_SPEED) speed = MAX_SPEED;
+  /* Optimize: precompute range constant at compile time */
+  return PWM_STARTUP_MIN + ((uint32_t)speed * (PWM_MAX_VALUE - PWM_STARTUP_MIN)) / MAX_SPEED;
+}
 
 void Mtrs_Init(void) {
   for (uint8_t i = 0; i < MOTOR_COUNT; i++) {
@@ -115,19 +125,6 @@ uint8_t mtr_GetSpeed(MtrID_t mtr_id) {
   return mtrs[mtr_id].speed;
 }
 
-/* Linear remapping: 1-100% speed → PWM_STARTUP_MIN to PWM_MAX_VALUE
- * This ensures motor always gets sufficient voltage to overcome static friction
- * Formula: pulse = PWM_STARTUP_MIN + (speed/100) * (PWM_MAX_VALUE - PWM_STARTUP_MIN) */
-uint32_t spd_Map(uint8_t speed) {
-  if (speed == 0) {
-    return 0;
-  }
-  if (speed > MAX_SPEED) {
-    speed = MAX_SPEED;
-  }
-  return PWM_STARTUP_MIN + ((uint32_t)speed * (PWM_MAX_VALUE - PWM_STARTUP_MIN)) / MAX_SPEED;
-}
-
 /* Motor advanced control functions (all -ve rotate clockwise) */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
   const int spds[MOTOR_COUNT] = {spd0, spd1, spd2, spd3};
@@ -151,22 +148,19 @@ void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
 
 void polarMove(float angle_deg, uint8_t speed_percent) {
   /* Validate and clamp speed */
-  if (speed_percent > MAX_SPEED) {
-    speed_percent = MAX_SPEED;
-  }
+  if (speed_percent > MAX_SPEED) speed_percent = MAX_SPEED;
   
   /* Convert angle to radians */
-  const float angle_rad = angle_deg * (PI / 180.0f);
-  const float phase_offset = PI / 4.0f;  /* 45 degrees for mecanum wheels */
-
-  /* Calculate with deadzone and rounding */
-  const float DEADZONE = 0.5f; /* Smaller deadzone since we're rounding */
+  const float angle_rad = angle_deg * DEG_TO_RAD;
+  const float phase_offset = PI_DIV_4;  /* PI/4 precomputed */
 
   /* Calculate motor speeds using mecanum kinematics */
-  float calcA = speed_percent * arm_sin_f32(angle_rad + phase_offset);
-  float calcB = speed_percent * arm_sin_f32(angle_rad - phase_offset);
+  const float speed_f = (float)speed_percent;
+  float calcA = speed_f * arm_sin_f32(angle_rad + phase_offset);
+  float calcB = speed_f * arm_sin_f32(angle_rad - phase_offset);
   
   /* Apply deadzone and rounding */
+  const float DEADZONE = 0.5f;
   int spdA = (fabsf(calcA) < DEADZONE) ? 0 : (int)roundf(calcA);
   int spdB = (fabsf(calcB) < DEADZONE) ? 0 : (int)roundf(calcB);
   
@@ -176,19 +170,19 @@ void polarMove(float angle_deg, uint8_t speed_percent) {
 
 void polarMoveWthCorr(float angle_deg, uint8_t speed_percent, int yaw_corr) {
   /* Validate and clamp speed */
-  if (speed_percent > MAX_SPEED) { speed_percent = MAX_SPEED; }
+  if (speed_percent > MAX_SPEED) speed_percent = MAX_SPEED;
+  
   /* Convert angle to radians */
-  const float angle_rad = angle_deg * (PI / 180.0f);
-  const float phase_offset = PI / 4.0f; /* 45 degrees for mecanum wheels */
-
-  /* Calculate with deadzone and rounding */
-  const float DEADZONE = 0.5f; /* Smaller deadzone since we're rounding */
+  const float angle_rad = angle_deg * DEG_TO_RAD;
+  const float phase_offset = PI_DIV_4;  /* PI/4 precomputed */
 
   /* Calculate motor speeds using mecanum kinematics */
-  float calcA = speed_percent * arm_sin_f32(angle_rad + phase_offset);
-  float calcB = speed_percent * arm_sin_f32(angle_rad - phase_offset);
+  const float speed_f = (float)speed_percent;
+  float calcA = speed_f * arm_sin_f32(angle_rad + phase_offset);
+  float calcB = speed_f * arm_sin_f32(angle_rad - phase_offset);
 
   /* Apply deadzone and rounding */
+  const float DEADZONE = 0.5f;
   int spdA = (fabsf(calcA) < DEADZONE) ? 0 : (int)roundf(calcA);
   int spdB = (fabsf(calcB) < DEADZONE) ? 0 : (int)roundf(calcB);
 

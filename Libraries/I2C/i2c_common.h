@@ -1,21 +1,18 @@
 #ifndef I2C_COMMON_H
 #define I2C_COMMON_H
 
-#include "i2c.h"
 #include <stdio.h>
-#include <stdint.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdbool.h>
 
-/* I2C Common Debug - uncomment to enable debug output */
-#define I2C_COMMON_DEBUG
+#include "i2c.h"
+#include "const.h"
+#include "dataPrint.h"
 
 /* I2C timeout in milliseconds */
 #define I2C_TIMEOUT_MS 300
 #define I2C_ERROR_RECOVERY_MS 200  /* Increased for better bus recovery */
-
-/* Overflow-safe time difference calculation (handles 32-bit tick wraparound) */
-#define TIME_DIFF(current, start) ((uint32_t)((current) - (start)))
 
 /** I2C state machine states */
 typedef enum {

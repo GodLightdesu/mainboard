@@ -20,7 +20,14 @@ int PID_Compute(PID_Controller_t *pid, float setpoint, float measured) {
   // Proportional term
   float p_term = pid->kp * error;
   
-  // Integral term with anti-windup
+  // Auto reset integral when crossing setpoint (optional, check before updating integral)
+  if (pid->auto_reset_integral) {
+    if ((error > 0.0f && pid->prev_error < 0.0f) || (error < 0.0f && pid->prev_error > 0.0f)) {
+      pid->integral = 0.0f;
+    }
+  }
+  
+  // Integral term with anti-windup (clamp integral accumulator)
   pid->integral += error;
   if (pid->integral > pid->integral_limit) {
     pid->integral = pid->integral_limit;
@@ -32,14 +39,6 @@ int PID_Compute(PID_Controller_t *pid, float setpoint, float measured) {
   // Derivative term
   float derivative = error - pid->prev_error;
   float d_term = pid->kd * derivative;
-  
-  // Auto reset integral when crossing setpoint (optional)
-  if (pid->auto_reset_integral) {
-    if ((error > 0 && pid->prev_error < 0) || (error < 0 && pid->prev_error > 0)) {
-      pid->integral = 0.0f;
-      i_term = 0.0f;
-    }
-  }
   
   // Update previous error for next iteration
   pid->prev_error = error;
@@ -54,7 +53,6 @@ int PID_Compute(PID_Controller_t *pid, float setpoint, float measured) {
   } else if (output_int < pid->output_min) {
     output_int = pid->output_min;
   }
-  
   return output_int;
 }
 

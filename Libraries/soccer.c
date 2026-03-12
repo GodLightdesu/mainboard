@@ -1,7 +1,4 @@
 #include "soccer.h"
-#include "button.h"
-#include "MPU6050DMP.h"
-#include "motors.h"
 
 // 系统状态变量
 static volatile bool systemStarted = false;
@@ -41,13 +38,17 @@ static void SoccerButtonControl(uint8_t btn_index, BtnEvent_t event) {
         MPU6050_DMP_ResetYaw();
       }
     } break;
-  case 3: // 按钮4 - Reset All
-    if (event == BTN_EVENT_LONG_PRESS_START) {
-      // 长按重启系统（从flash运行）
-      dataUart_SendString("System Reset - Running from Flash...\r\n");
-      HAL_Delay(100);  // 让消息发送完成
-      NVIC_SystemReset();  // 系统重启
-    } break;
+  // case 3: // 按钮4 - Reset All
+  //   if (event == BTN_EVENT_LONG_PRESS_START) {
+  //     // 长按重启系统（从flash运行）
+  //     systemStarted = false;
+  //     emergencyStop = false;
+  //     state = STATE_IDLE;
+  //     mtrs_StopAll();
+  //     dataUart_SendString("System Reset - Running from Flash...\r\n");
+  //     HAL_Delay(100);  // 让消息发送完成
+  //     NVIC_SystemReset();  // 系统重启
+  //   } break;
   }
 }
 
@@ -56,7 +57,7 @@ void SoccerInit(void) {
   Button_SetSystemControlCallback(0, SoccerButtonControl);  // 按钮1：启动
   Button_SetSystemControlCallback(1, SoccerButtonControl);  // 按钮2：紧急停止
   Button_SetSystemControlCallback(2, SoccerButtonControl);  // 按钮3：reset yaw
-  Button_SetSystemControlCallback(3, SoccerButtonControl);  // 按钮4：reset all
+  // Button_SetSystemControlCallback(3, SoccerButtonControl);  // 按钮4：reset all
   
   // 初始化PID控制器
   PID_Init(&yawAlignPID, YAW_PID_kp, YAW_PID_ki, YAW_PID_kd, 
@@ -84,32 +85,70 @@ void setState(State_t newState) { state = newState; }
 State_t getState() { return state; }
 State_t updateState(const ModuleData_t *data) {
   State_t currentState = getState();
-
-  bool mpuReady = MPU6050_DMP_IsDataReady();
-  // if (!mpuReady) {
-  //   currentState = STATE_IDLE; // No valid data, go to idle
-  //   setState(currentState);
-  //   return currentState;
-  // }
-
+  State_t nextState = currentState;
+  
+  // Extract sensor data
   float yaw = data->mpuData->euler.yaw;
-  bool irReady = IR_IsDataReady();
-  // Ball is detected by IR sensor
-  if (data->irData->ballAngle >= 0) {
-    currentState = STATE_CHASE_BALL;
-  } else {  // No ball detected - decide whether to search or align based on yaw
-    if (-YAW_THRESHOLD <= yaw && yaw <= YAW_THRESHOLD) {
-      currentState = STATE_SEARCH_BALL;
-    } else {
-      currentState = STATE_ALIGN_YAW;
+  float ballAngle = data->irData->ballAngle;
+  bool ballDetected = (ballAngle >= 0);
+  bool yawAligned = (-YAW_THRESHOLD <= yaw && yaw <= YAW_THRESHOLD);
+  
+  // State machine transitions based on current state
+  switch (currentState) {
+  case STATE_IDLE:
+    // Can only transition when system starts (handled by button callback)
+    // Stay in IDLE state until external trigger
+    break;
+    
+  case STATE_SEARCH_BALL:
+    if (ballDetected) {
+      // Found ball - switch to chase
+      nextState = STATE_CHASE_BALL;
+    } else if (!yawAligned) {
+      // Need to align yaw before continuing search
+      nextState = STATE_ALIGN_YAW;
     }
+    // Otherwise stay in SEARCH_BALL
+    break;
+    
+  case STATE_CHASE_BALL:
+    if (!ballDetected) {
+      // Lost ball - decide next action
+      if (yawAligned) {
+        nextState = STATE_SEARCH_BALL;
+      } else {
+        nextState = STATE_ALIGN_YAW;
+      }
+    }
+    // If ball still detected, stay in CHASE_BALL
+    break;
+    
+  case STATE_ALIGN_YAW:
+    if (yawAligned) {
+      // Yaw aligned - go search for ball
+      nextState = STATE_SEARCH_BALL;
+    } else if (ballDetected) {
+      // Ball detected during alignment - prioritize chasing
+      nextState = STATE_CHASE_BALL;
+    }
+    // Otherwise stay in ALIGN_YAW until aligned
+    break;
+    
+  case STATE_OUT_OF_BOUNDS:
+    // TODO: Implement transition back to normal operation
+    // For now, stay in OUT_OF_BOUNDS until manual intervention
+    break;
+    
+  default:
+    // Invalid state - reset to IDLE for safety
+    nextState = STATE_IDLE;
+    break;
   }
   
-  setState(currentState);
-  return currentState;
+  setState(nextState);
+  return nextState;
 }
 
-// TODO: using state machine to control behavior
 void soccer_ProcessData(const ModuleData_t *data) {
   // 检查紧急停止 or 系统未启动，直接返回
   if (emergencyStop || !systemStarted) {
@@ -117,53 +156,80 @@ void soccer_ProcessData(const ModuleData_t *data) {
     return;
   }
 
-  if (!MPU6050_DMP_IsDataReady()) {
-    mtrs_StopAll();  // No valid data, stop motors for safety
-    return;
-  }
-
+  // Common variables
   const float target_yaw = 0.0f;
   float yaw = data->mpuData->euler.yaw;
   float ballAngle = data->irData->ballAngle;
   
-  float moveAngle = ballAngle;
-  float angleDrift = 0.0f;
-  const float maxValue = (float)data->irData->maxValue;
-  const float BallBigRadius = 600.0f; // R = Max eye value * tan(theta)
-
-  if (ballAngle >=0) {
-    int yawCorr = (int)PID_Compute(&yawCorrectPID, target_yaw, yaw);
-    int spd = BASE_SPEED + BALL_CHASE_SPEED_BONUS;
-    // TODO: angleDrift shd be small when ball is far, but can cause large angle correction when close.
-    if (15 < ballAngle && ballAngle <= 180) {
-      arm_atan2_f32(BallBigRadius, POSSIBLE_MAX_BALL_VALUE-maxValue, &angleDrift);
-      moveAngle = ballAngle + angleDrift * 57.295779513f; // Convert to degrees
-    } else if (180 < ballAngle && ballAngle <= 345) {
-      arm_atan2_f32(BallBigRadius, POSSIBLE_MAX_BALL_VALUE-maxValue, &angleDrift);
-      moveAngle = ballAngle - angleDrift * 57.295779513f; // Convert to degrees
-    } else {    // Ball is straight ahead, no angle correction needed
-      moveAngle = ballAngle;
+  // Update state based on sensor data
+  State_t currentState = updateState(data);
+  
+  // State machine execution
+  switch (currentState) {
+    case STATE_IDLE:
+      mtrs_StopAll();
+      break;
+      
+    case STATE_SEARCH_BALL: {
+      // Rotate slowly to search for ball
+      // TODO: Implement search pattern (e.g., rotate in place)
+      mtrs_StopAll();
+      break;
     }
-    polarMoveWthCorr(moveAngle, spd, yawCorr);
-  } else if (yaw < -YAW_THRESHOLD || yaw > YAW_THRESHOLD) {
-    int pidOutput = (int)PID_Compute(&yawAlignPID, target_yaw, yaw);
-    mtrs_Set4Speed(pidOutput, pidOutput, pidOutput, pidOutput);
-  } else {
-    mtrs_StopAll();
+    
+    case STATE_CHASE_BALL: {
+      // Chase ball with angle correction
+      float moveAngle = ballAngle;
+      const float maxValue = (float)data->irData->maxValue;
+      const float BallBigRadius = 600.0f; // R = Max eye value * tan(theta)
+      
+      int yawCorr = (int)PID_Compute(&yawCorrectPID, target_yaw, yaw);
+      int spd = BASE_SPEED + BALL_CHASE_SPEED_BONUS;
+      
+      // Apply angle correction based on ball position (optimize: avoid redundant calls)
+      if ((ANGLE_CORR_MIN_THRESHOLD < ballAngle && ballAngle <= ANGLE_HALF_CIRCLE) ||
+          (ANGLE_HALF_CIRCLE < ballAngle && ballAngle <= ANGLE_CORR_MAX_THRESHOLD)) {
+        float angleDrift;
+        arm_atan2_f32(BallBigRadius, POSSIBLE_MAX_BALL_VALUE - maxValue, &angleDrift);
+        angleDrift *= RAD_TO_DEG; // Convert to degrees once
+        
+        // Apply correction direction based on which side of 180° the ball is
+        moveAngle = (ballAngle <= ANGLE_HALF_CIRCLE) ? 
+                    (ballAngle + angleDrift) : (ballAngle - angleDrift);
+      }
+      // else: Ball is straight ahead or behind, no angle correction needed
+      
+      polarMoveWthCorr(moveAngle, spd, yawCorr);
+      break;
+    }
+    
+    case STATE_ALIGN_YAW: {
+      // Rotate in place to align yaw to target
+      int pidOutput = (int)PID_Compute(&yawAlignPID, target_yaw, yaw);
+      mtrs_Set4Speed(pidOutput, pidOutput, pidOutput, pidOutput);
+      break;
+    }
+    
+    case STATE_OUT_OF_BOUNDS:
+      // TODO: Implement out of bounds behavior
+      mtrs_StopAll();
+      break;
+      
+    default:
+      mtrs_StopAll();
+      break;
   }
   
   #ifdef DEBUG_SOCCER
   static uint32_t lastDebug = 0;
-  if (HAL_GetTick() - lastDebug > 300) {  // Every 300 ms
+  const uint32_t currentTime = HAL_GetTick();
+  if (TIME_DIFF(currentTime, lastDebug) >= DEBUG_PRINT_INTERVAL_MS) {
     bool irReady = IR_IsDataReady();
     bool mpuReady = MPU6050_DMP_IsDataReady();
-    char msg[160];
-    snprintf(msg, sizeof(msg), 
-              "IR: rdy=%d ang=%.1f max=%d eye=%d | Yaw=%.1f MPU=%d | State=%d\r\n",
-              irReady, ballAngle, data->irData->maxValue, 
-              data->irData->maxEye, yaw, mpuReady, getState());
-    dataUart_SendString(msg);
-    lastDebug = HAL_GetTick();
+    printf("IR: rdy=%d ang=%.1f max=%d eye=%d | Yaw=%.1f MPU=%d | State=%d\r\n",
+           irReady, ballAngle, data->irData->maxValue, 
+           data->irData->maxEye, yaw, mpuReady, currentState);
+    lastDebug = currentTime;
   }
   #endif
 
@@ -175,9 +241,7 @@ void soccer_ProcessData(const ModuleData_t *data) {
 // 添加等待启动的函数
 void Soccer_WaitForStart(void) {
 #ifdef DEBUG_BUTTON
-  char msg[64];
-  snprintf(msg, sizeof(msg), "Waiting for system start...\r\n");
-  dataUart_SendString(msg);
+  printf("Waiting for system start...\r\n");
 #endif
   
   // 等待系统启动
@@ -185,16 +249,16 @@ void Soccer_WaitForStart(void) {
     HAL_IWDG_Refresh(&hiwdg1);  // Refresh watchdog to prevent reset
     // 闪烁LED表示等待状态
     static uint32_t lastBlink = 0;
-    if (HAL_GetTick() - lastBlink > 500) {
+    const uint32_t currentTime = HAL_GetTick();
+    if (TIME_DIFF(currentTime, lastBlink) >= LED_WAIT_BLINK_MS) {
       HAL_GPIO_TogglePin(GPIOB, LED_4_Pin);
-      lastBlink = HAL_GetTick();
+      lastBlink = currentTime;
     }
     HAL_Delay(10);
   }
   
 #ifdef DEBUG_BUTTON
-  snprintf(msg, sizeof(msg), "System started successfully!\r\n");
-  dataUart_SendString(msg);
+  printf("System started successfully!\r\n");
 #endif
   
   HAL_GPIO_WritePin(GPIOD, LED_4_Pin, GPIO_PIN_SET);

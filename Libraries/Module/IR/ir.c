@@ -1,5 +1,4 @@
 #include "ir.h"
-#include "dataPrint.h"
 
 static IR_t IR = {0};
 
@@ -48,28 +47,41 @@ static void IR_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
   const uint16_t offset = slaveId * EYE_NUM;
   for (uint8_t i = 0; i < EYE_NUM; i++) {
     const uint8_t idx = 2 + (i * 2);  // 跳過 Vref（前 2 位元組）
+    
+    /* 邊界檢查：確保不會超出緩衝區 */
+    if (idx + 1 >= slave->bufferSize) {
+      IR.eyeValues[offset + i] = 0;
+      continue;
+    }
+    
     IR.eyeValues[offset + i] = combine_data(slave->processBuffer[idx + 1], slave->processBuffer[idx]);
   }
   
   /* 標記新資料並檢查所有已啟用的從設備是否準備好 */
-  __disable_irq();
-  freshDataMask |= (1 << slaveId);
-  
-  /* 內聯計算已啟用掩碼 */
+  /* Precompute enabled mask outside critical section */
   uint8_t enabledMask = 0;
   for (uint8_t s = 0; s < IR_SLAVES_NO; s++) {
     if (IR.slaves[s].enabled) enabledMask |= (1 << s);
   }
   
+  /* Critical section: only update flags atomically */
+  __disable_irq();
+  freshDataMask |= (1 << slaveId);
+  uint8_t localFreshMask = freshDataMask;
+  __enable_irq();
+  
   /* 所有已啟用的從設備都有新資料了嗎？*/
-  if (freshDataMask == enabledMask) {
-    freshDataMask = 0;  // 重置以供下個週期使用
+  if (localFreshMask == enabledMask) {
+    /* Reset mask atomically */
+    __disable_irq();
+    freshDataMask = 0;
     __enable_irq();
     
     /* 找出所有已啟用感測器中的最大值 */
     IR.maxValue = 0;
     IR.maxEye = 0;
-    for (uint8_t eye = 0; eye < IR_SLAVES_NO * EYE_NUM; eye++) {
+    const uint8_t totalEyes = IR_SLAVES_NO * EYE_NUM;  // 14 個感測器
+    for (uint8_t eye = 0; eye < totalEyes; eye++) {
       const uint8_t slaveIdx = eye / EYE_NUM;
       if (IR.slaves[slaveIdx].enabled && IR.eyeValues[eye] > IR.maxValue) {
         IR.maxValue = IR.eyeValues[eye];
@@ -164,11 +176,15 @@ float IR_CalBallAngle(void) {
   float sumX = 0.0f, sumY = 0.0f, sumWeight = 0.0f;
   
   // 使用預先計算的 eyeValues 處理所有 14 個感測器
-  for (uint8_t eye = 0; eye < IR_SLAVES_NO * EYE_NUM; eye++) {
+  const uint8_t totalEyes = IR_SLAVES_NO * EYE_NUM;  // 14 個感測器
+  for (uint8_t eye = 0; eye < totalEyes; eye++) {
     uint16_t value = IR.eyeValues[eye];
     
     // 僅使用超過閾值的感測器
     if (value > IR_DETECTION_THRESHOLD) {
+      /* 邊界檢查：確保眼睛索引有效 */
+      if (eye >= 14) continue;  // 安全檢查
+      
       float weight = (float)value;
       float rad = EYE_ANGLES[eye] * (PI / 180.0f);
       
@@ -183,12 +199,17 @@ float IR_CalBallAngle(void) {
   
   // 使用 atan2 計算加權方向
   float angle;
+  // change x and y to match 0° at front and clockwise positive
   arm_atan2_f32(sumX, sumY, &angle);
   angle *= (180.0f / PI);
 
-  // map to 0-360°
-  while (angle >= 360.0f) { angle -= 360.0f; }
-  while (angle < 0.0f) { angle += 360.0f; }
+  // map to 0-360° (use modulo to prevent infinite loop on NaN)
+  if (!isnan(angle)) {
+    angle = fmodf(angle, 360.0f);
+    if (angle < 0.0f) { angle += 360.0f; }
+  } else {
+    return -1.0f;  // Invalid angle
+  }
   
   return angle;
 }
@@ -210,6 +231,11 @@ float IR_CalBallAngleInterpolated(void) {
   }
   
   uint8_t maxIdx = IR.maxEye;
+  
+  /* 邊界檢查：驗證最大眼睛索引在有效範圍內 */
+  if (maxIdx >= 14) {
+    return -1.0f;  // 無效索引，返回無球
+  }
   
   // 取得相鄰感測器索引（循環包裹）
   uint8_t prevIdx = (maxIdx == 0) ? 13 : maxIdx - 1;

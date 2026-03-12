@@ -17,10 +17,17 @@
 #define ACCEL_FSR_8G      8     /**< Accelerometer full scale range: ±8g */
 #define ACCEL_FSR_16G     16    /**< Accelerometer full scale range: ±16g */
 
-#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "i2c.h"
 #include "arm_math.h"
+#include "inv_mpu.h"
+#include "inv_mpu_dmp_motion_driver.h"
+
+#ifdef DEBUG_I2C
+#include "dataPrint.h"
+#endif
 
 typedef struct {
   float w, x, y, z; // Quaternion components
@@ -33,7 +40,7 @@ typedef struct
   float yaw;   // +ve face left, -ve face right (Z-axis rotation)
 } EulerAngles_t;
 
-typedef struct
+typedef struct MPU6050_DMP_t
 {
   bool ready;  // Data ready flag
   Quaternion_t quaternion;

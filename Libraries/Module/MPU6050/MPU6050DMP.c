@@ -1,11 +1,4 @@
 #include "MPU6050DMP.h"
-#include "inv_mpu.h"
-#include "inv_mpu_dmp_motion_driver.h"
-#include "i2c.h"
-
-#ifdef DEBUG_I2C
-#include "dataPrint.h"
-#endif
 
 static MPU6050_DMP_t dmpData = {0};
 static uint8_t consecutiveI2CErrors = 0;  // Track consecutive I2C errors
@@ -144,23 +137,38 @@ int MPU6050DMP_updateData(void) {
   }
 
   if (sensors & INV_WXYZ_QUAT) {
-    q0 = quat[0] / QUAT_SCALE;
-    q1 = quat[1] / QUAT_SCALE;
-    q2 = quat[2] / QUAT_SCALE;
-    q3 = quat[3] / QUAT_SCALE;
+    /* Normalize quaternion (use reciprocal for faster division) */
+    const float q_scale_recip = 1.0f / QUAT_SCALE;
+    q0 = (float)quat[0] * q_scale_recip;
+    q1 = (float)quat[1] * q_scale_recip;
+    q2 = (float)quat[2] * q_scale_recip;
+    q3 = (float)quat[3] * q_scale_recip;
 
     dmpData.quaternion.w = q0;
     dmpData.quaternion.x = q1;
     dmpData.quaternion.y = q2;
     dmpData.quaternion.z = q3;
 
-    // Convert quaternion to Euler angles (in degrees)
-    float roll, pitch, yaw;
-    pitch = arm_sin_f32(-2 * (q1 * q3 - q0 * q2)) * 57.295779513f; // Pitch
-    arm_atan2_f32(2 * (q2 * q3 + q0 * q1), -2 * (q1 * q1 + q2 * q2) + 1, &roll);
-    arm_atan2_f32(2 * (q1 * q2 + q0 * q3), q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3, &yaw);
-    roll *= 57.295779513f; // Convert to degrees
-    yaw *= 57.295779513f;  // Convert to degrees
+    /* Convert quaternion to Euler angles (in degrees)
+     * Precompute common terms to avoid redundant calculations */
+    const float RAD_TO_DEG = 57.295779513f;
+    const float q0q0 = q0 * q0;
+    const float q1q1 = q1 * q1;
+    const float q2q2 = q2 * q2;
+    const float q3q3 = q3 * q3;
+    
+    /* Pitch: arcsin(-2*(q1*q3 - q0*q2)) */
+    float pitch = arm_sin_f32(-2.0f * (q1 * q3 - q0 * q2)) * RAD_TO_DEG;
+    
+    /* Roll: atan2(2*(q2*q3 + q0*q1), 1 - 2*(q1*q1 + q2*q2)) */
+    float roll;
+    arm_atan2_f32(2.0f * (q2 * q3 + q0 * q1), 1.0f - 2.0f * (q1q1 + q2q2), &roll);
+    roll *= RAD_TO_DEG;
+    
+    /* Yaw: atan2(2*(q1*q2 + q0*q3), q0*q0 + q1*q1 - q2*q2 - q3*q3) */
+    float yaw;
+    arm_atan2_f32(2.0f * (q1 * q2 + q0 * q3), q0q0 + q1q1 - q2q2 - q3q3, &yaw);
+    yaw *= RAD_TO_DEG;
 
     dmpData.euler.roll = roll;
     dmpData.euler.pitch = pitch;
@@ -192,10 +200,8 @@ void MPU6050DMP_HandleI2CError(void) {
   HAL_I2C_StateTypeDef i2cState = HAL_I2C_GetState(&hi2c3);
   
   #ifdef DEBUG_I2C
-  char msg[100];
-  snprintf(msg, sizeof(msg), "MPU6050 I2C: State=%d, Error=0x%lX, ErrCount=%d\r\n", 
+  printf("MPU6050 I2C: State=%d, Error=0x%lX, ErrCount=%d\r\n", 
            i2cState, i2cError, consecutiveI2CErrors);
-  dataUart_SendString(msg);
   #endif
   
   if (i2cError != HAL_I2C_ERROR_NONE) {

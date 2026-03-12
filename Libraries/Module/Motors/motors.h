@@ -26,15 +26,13 @@ PWM Channel Mapping:
 #define PWM_MAX_VALUE (uint16_t)(1000 - 1)   /**< 10kHz PWM @ 10MHz timer clock */
 #define PWM_STARTUP_MIN 400                  /**< Min PWM for motor startup (~40% duty, ~4.8V @ 12V supply) */
 
-/* Mathematical constants */
-#ifndef PI
-#define PI 3.14159265358979323846f
-#endif
-
+#include <stdint.h>
 
 #include "tim.h"
+#include "const.h"
 #include "arm_math.h"
-#include "stdint.h"
+#include "dataPrint.h"
+
 typedef enum {
   FAST_DECAY = 0,
   SLOW_DECAY      // spd need to be higher to achieve same effective voltage in slow decay mode
@@ -74,7 +72,6 @@ void mtr_SetDecayMode(MtrID_t mtr_id, DecayMode_t decay_mode);
 /* Motor status and utility functions */
 MtrDir_t mtr_GetDirection(MtrID_t mtr_id);
 uint8_t mtr_GetSpeed(MtrID_t mtr_id);
-uint32_t spd_Map(uint8_t speed);
 
 /* Motor advanced control functions */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3);

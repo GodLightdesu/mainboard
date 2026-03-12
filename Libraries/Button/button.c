@@ -1,11 +1,4 @@
 #include "button.h"
-#include "stm32h7xx_hal.h"
-#include <string.h>
-
-// 添加 dataPrint 头文件用于调试输出
-#ifdef DEBUG_BUTTON
-#include "dataPrint.h"
-#endif
 
 static const BtnPin_t btns_Pin[MAX_BUTTONS] = {
   {GPIOD, BTN_1_Pin}, // Button 1 - 启动按钮
@@ -84,26 +77,22 @@ static bool ProcessDebounce(Button_t* btn, uint32_t currentTime) {
     
     #ifdef DEBUG_BUTTON
     if (btn->buttonName) {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "[%s] Raw state changed to: %s\r\n", 
-                btn->buttonName, btn->rawState ? "PRESSED" : "RELEASED");
-        dataUart_SendString(msg);
+      printf("[%s] Raw state changed to: %s\r\n", 
+              btn->buttonName, btn->rawState ? "PRESSED" : "RELEASED");
     }
     #endif
   }
   
   // 检查消抖是否完成（使用绝对时间差）
-  if ((currentTime - btn->debounceTimer) >= BTN_DEBOUNCE_TIME_MS) {
+  if (TIME_DIFF(currentTime, btn->debounceTimer) >= BTN_DEBOUNCE_TIME_MS) {
     if (btn->stableState != btn->rawState) {
       btn->stableState = btn->rawState;
       changed = true;
       
       #ifdef DEBUG_BUTTON
       if (btn->buttonName) {
-          char msg[64];
-          snprintf(msg, sizeof(msg), "[%s] Stable state changed to: %s\r\n", 
-                  btn->buttonName, btn->stableState ? "PRESSED" : "RELEASED");
-          dataUart_SendString(msg);
+        printf("[%s] Stable state changed to: %s\r\n", 
+                btn->buttonName, btn->stableState ? "PRESSED" : "RELEASED");
       }
       #endif
     }
@@ -150,7 +139,7 @@ static void HandleIdleState(uint8_t btnIndex, Button_t* btn, uint32_t currentTim
 
 static void HandleDebouncePressState(uint8_t btnIndex, Button_t* btn, uint32_t currentTime) {
   if (btn->stableState) {
-    if ((currentTime - btn->timer) >= BTN_DEBOUNCE_TIME_MS) {
+    if (TIME_DIFF(currentTime, btn->timer) >= BTN_DEBOUNCE_TIME_MS) {
       ChangeState(btnIndex, btn, BTN_STATE_PRESSED, currentTime);
       btn->pressTime = currentTime;
       if (btn->clickCount == 0) {
@@ -159,10 +148,8 @@ static void HandleDebouncePressState(uint8_t btnIndex, Button_t* btn, uint32_t c
       
       #ifdef DEBUG_BUTTON
       if (btn->buttonName) {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "[%s] Press detected, clickCount: %d\r\n", 
+        printf("[%s] Press detected, clickCount: %d\r\n", 
                 btn->buttonName, btn->clickCount);
-        dataUart_SendString(msg);
       }
       #endif
     }
@@ -173,7 +160,7 @@ static void HandleDebouncePressState(uint8_t btnIndex, Button_t* btn, uint32_t c
 }
 
 static void HandlePressedState(uint8_t btnIndex, Button_t* btn, uint32_t currentTime) {
-  uint32_t press_duration = currentTime - btn->pressTime;
+  uint32_t press_duration = TIME_DIFF(currentTime, btn->pressTime);
   // uint32_t now = HAL_GetTick();  // 重新获取当前时间
   // uint32_t press_duration = now - btn->pressTime;  // 使用最新的时间
 
@@ -190,17 +177,15 @@ static void HandlePressedState(uint8_t btnIndex, Button_t* btn, uint32_t current
 
 static void HandleWaitReleaseState(uint8_t btnIndex, Button_t* btn, uint32_t currentTime) {
   if (!btn->stableState) {
-    uint32_t release_duration = currentTime - btn->releaseTime;
+    uint32_t release_duration = TIME_DIFF(currentTime, btn->releaseTime);
     
     if (release_duration < BTN_DOUBLE_CLICK_TIME_MS) {
       ChangeState(btnIndex, btn, BTN_STATE_WAIT_DOUBLE, currentTime);
       
       #ifdef DEBUG_BUTTON
       if (btn->buttonName) {
-          char msg[64];
-          snprintf(msg, sizeof(msg), "[%s] Waiting for double click...\r\n", 
-                  btn->buttonName);
-          dataUart_SendString(msg);
+        printf("[%s] Waiting for double click...\r\n", 
+                btn->buttonName);
       }
       #endif
     } else {
@@ -212,7 +197,7 @@ static void HandleWaitReleaseState(uint8_t btnIndex, Button_t* btn, uint32_t cur
 }
 
 static void HandleWaitDoubleState(uint8_t btnIndex, Button_t* btn, uint32_t currentTime) {
-  uint32_t wait_duration = currentTime - btn->releaseTime;
+  uint32_t wait_duration = TIME_DIFF(currentTime, btn->releaseTime);
   
   if (wait_duration >= BTN_DOUBLE_CLICK_TIME_MS) {
     ChangeState(btnIndex, btn, BTN_STATE_IDLE, currentTime);
@@ -224,10 +209,8 @@ static void HandleWaitDoubleState(uint8_t btnIndex, Button_t* btn, uint32_t curr
     
     #ifdef DEBUG_BUTTON
     if (btn->buttonName) {
-      char msg[64];
-      snprintf(msg, sizeof(msg), "[%s] Second click detected, clickCount: %d\r\n", 
+      printf("[%s] Second click detected, clickCount: %d\r\n", 
               btn->buttonName, btn->clickCount);
-      dataUart_SendString(msg);
     }
     #endif
   }
@@ -241,7 +224,7 @@ static void HandleLongPressState(uint8_t btnIndex, Button_t* btn, uint32_t curre
     btn->lastHoldReportTime = 0;
   } 
   // 长按持续报告（可选）
-  else if ((currentTime - btn->lastHoldReportTime) >= 500) {
+  else if (TIME_DIFF(currentTime, btn->lastHoldReportTime) >= LONG_PRESS_HOLD_REPORT_MS) {
     SendSystemControlEvent(btnIndex, btn, BTN_EVENT_LONG_PRESS_HOLD);
     btn->lastHoldReportTime = currentTime;
   }
@@ -249,7 +232,7 @@ static void HandleLongPressState(uint8_t btnIndex, Button_t* btn, uint32_t curre
 
 static void HandleReleaseDebounceState(uint8_t btnIndex, Button_t* btn, uint32_t currentTime) {
   if (!btn->stableState) {
-    if ((currentTime - btn->timer) >= BTN_DEBOUNCE_TIME_MS) {
+    if (TIME_DIFF(currentTime, btn->timer) >= BTN_DEBOUNCE_TIME_MS) {
       if (btn->clickCount == 2) {
         // 双击事件（用于紧急停止）
         ChangeState(btnIndex, btn, BTN_STATE_IDLE, currentTime);
@@ -292,13 +275,11 @@ void Button_Init(void) {
     buttons[i].buttonName = btn_names[i];
     
     #ifdef DEBUG_BUTTON
-    char msg[64];
-    snprintf(msg, sizeof(msg), "[Button] %s initialized at GPIO Port: %c, Pin: %d\r\n", 
+    printf("[Button] %s initialized at GPIO Port: %c, Pin: %d\r\n", 
             btn_names[i], 
             (buttons[i].pin.port == GPIOD) ? 'D' : 
             (buttons[i].pin.port == GPIOC) ? 'C' : '?',
             buttons[i].pin.pin);
-    dataUart_SendString(msg);
     #endif
   }
 }
@@ -329,10 +310,8 @@ BtnEvent_t Button_GetEvent(uint8_t btnIndex) {
     
     #ifdef DEBUG_BUTTON
     if (buttons[btnIndex].buttonName) {
-        char msg[80];
-        snprintf(msg, sizeof(msg), "[%s] Event retrieved: %s\r\n", 
+        printf("[%s] Event retrieved: %s\r\n", 
                 buttons[btnIndex].buttonName, event_names[event]);
-        dataUart_SendString(msg);
     }
     #endif
     
@@ -348,10 +327,8 @@ BtnState_t Button_GetState(uint8_t btnIndex) {
   
   #ifdef DEBUG_BUTTON
   if (buttons[btnIndex].buttonName) {
-    char msg[64];
-    snprintf(msg, sizeof(msg), "[%s] State queried: %s\r\n", 
+    printf("[%s] State queried: %s\r\n", 
             buttons[btnIndex].buttonName, state_names[buttons[btnIndex].state]);
-    dataUart_SendString(msg);
   }
   #endif
   
@@ -368,10 +345,8 @@ bool Button_IsPressed(uint8_t btnIndex) {
   if (pressed != last_pressed_state[btnIndex]) {
     last_pressed_state[btnIndex] = pressed;
     if (buttons[btnIndex].buttonName) {
-      char msg[64];
-      snprintf(msg, sizeof(msg), "[%s] IsPressed query result: %s\r\n", 
+      printf("[%s] IsPressed query result: %s\r\n", 
               buttons[btnIndex].buttonName, pressed ? "PRESSED" : "RELEASED");
-      dataUart_SendString(msg);
     }
   }
   #endif
@@ -387,10 +362,8 @@ void Button_SetSystemControlCallback(uint8_t btnIndex, SystemControlCallback_t c
   
   #ifdef DEBUG_BUTTON
   if (buttons[btnIndex].buttonName) {
-    char msg[80];
-    snprintf(msg, sizeof(msg), "[%s] System control callback set: %s\r\n", 
+    printf("[%s] System control callback set: %s\r\n", 
             buttons[btnIndex].buttonName, callback ? "Enabled" : "Disabled");
-    dataUart_SendString(msg);
   }
   #endif
 }
@@ -414,8 +387,6 @@ void Button_SetButtonName(uint8_t btnIndex, const char* name) {
   
   buttons[btnIndex].buttonName = name;
   
-  char msg[64];
-  snprintf(msg, sizeof(msg), "[Button] Button %d renamed to: %s\r\n", btnIndex, name);
-  dataUart_SendString(msg);
+  printf("[Button] Button %d renamed to: %s\r\n", btnIndex, name);
 }
 #endif

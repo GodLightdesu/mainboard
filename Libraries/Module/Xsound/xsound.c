@@ -1,6 +1,4 @@
 #include "xsound.h"
-#include "const.h"
-#include "dataPrint.h"
 
 static Xsound_t Xsound = {0};
 

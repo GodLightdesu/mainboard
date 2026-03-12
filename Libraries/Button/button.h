@@ -7,11 +7,13 @@
 #define BTN_DOUBLE_CLICK_TIME_MS 300  // 双击间隔时间阈值
 #define BTN_SCAN_INTERVAL_MS    10    // 扫描间隔
 
-#include "tim.h"
-#include "gpio.h"
-#include <stdbool.h>
-#include <stdint.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "const.h"
+#include "gpio.h"
+#include "tim.h"
 
 // 添加 dataPrint 头文件用于调试输出
 #ifdef DEBUG_BUTTON

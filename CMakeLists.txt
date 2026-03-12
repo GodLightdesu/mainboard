@@ -131,18 +131,17 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     DEBUG_GENERAL # 启用通用调试信息输出
     DEBUG_BUTTON # 启用按键调试信息输出
 
-    DEBUG_SOCCER # 启用足球机器人状态机调试信息输出
+    # DEBUG_SOCCER # 启用足球机器人状态机调试信息输出
 
     # DEBUG_IR # 启用红外传感器调试信息
-    DEBUG_XS # 启用Xsound传感器调试信息
+    # DEBUG_XS # 启用Xsound传感器调试信息
+    # DEBUG_GRAYSCALE # 启用灰度传感器调试信息
 
-    # 可选调试宏（按需启用）:
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
-    # DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
+    DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
     # DEBUG_I2C # I2C通信错误和状态调试
 
     # DEBUG_MOTORS         # 电机测试PWM值调试
-    # DEBUG_SOCCER         # 足球机器人状态机转换和决策调试
 
     # ==================== STM32H750 必需宏 ====================
     USE_HAL_DRIVER # 启用HAL库

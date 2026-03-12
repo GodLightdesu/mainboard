@@ -28,18 +28,18 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include "string.h"
-#include "const.h"
-#include "dataPrint.h"
+#include <stdio.h>
 
+// Modules' headers
 #include "ir.h"
-#include "MPU6050DMP.h"
 #include "motors.h"
 #include "button.h"
-#include "soccer.h"
-#include "grayscale.h"
 #include "xsound.h"
+#include "grayscale.h"
+#include "MPU6050DMP.h"
+#include "dataPrint.h"
+#include "soccer.h"
+#include "const.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -152,33 +152,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  /* Early button check BEFORE any system configuration */
-  /* Enable GPIOD clock manually (RCC->AHB4ENR bit 3 for GPIOD) */
-  // RCC->AHB4ENR |= RCC_AHB4ENR_GPIODEN;
-  // /* Small delay for clock stabilization */
-  // for(volatile uint32_t i = 0; i < 1000; i++);
-  
-  // /* Configure BTN_4 (PD2) as input with pull-up */
-  // /* MODER: 00 for input (clear bits 5:4) */
-  // GPIOD->MODER &= ~(0x3U << (2 * 2));
-  // /* PUPDR: 01 for pull-up (set bit 4, clear bit 5) */
-  // GPIOD->PUPDR &= ~(0x3U << (2 * 2));
-  // GPIOD->PUPDR |= (0x1U << (2 * 2));
-  
-  // /* Wait for GPIO to stabilize */
-  // for(volatile uint32_t i = 0; i < 10000; i++);
-  
-  // /* Check if BTN_4 is pressed (IDR bit 2) */
-  // /* Button pressed = 0 (low), Button not pressed = 1 (high) */
-  // if ((GPIOD->IDR & GPIO_PIN_2) == 0) {
-  //   /* BTN_4 not pressed - Jump to bootloader immediately */
-  //   /* System is in clean state - only RCC clock enabled */
-  //   JumpToBootloader();
-  // }
-  /* BTN_4 is pressed - Continue running from flash */
-  
   /* Power-on delay to allow capacitors to stabilize */
-  /* TEMPORARILY DISABLED FOR DEBUGGING - Re-enable after confirming flash works */
   for(volatile uint32_t i = 0; i < POWER_ON_DELAY_CYCLES; i++);
   /* USER CODE END 1 */
 
@@ -239,16 +213,9 @@ int main(void)
 
   /* Initialize IR sensor module with I2C peripheral */
   IR_Init(&hi2c3);
-  // Optional: Disable IR module for testing
-  // IR_SetSlaveEnabled(IR_SLAVE_1, false);
-  // IR_SetSlaveEnabled(IR_SLAVE_2, false);
   
   /* Initialize Xsound sensor module with I2C peripheral */
   Xsound_Init(&hi2c3);
-  
-  /* Check for I2C devices before initializing (optional debugging) */
-  // I2C_Find(&hi2c3, IR_GetSlaveAddress(IR_SLAVE_1));
-  // I2C_Find(&hi2c3, IR_GetSlaveAddress(IR_SLAVE_2));
   
   /* Initialize MPU6050 with retry loop */
   uint16_t addr = 0x68;     // mpu6050
@@ -257,55 +224,55 @@ int main(void)
     if (I2C_Find(&hi2c2, addr)) {
       result = MPU6050_DMP_Init();
       if (result != 0) {
-        dataUart_PrintInitError("MPU6050 DMP Init failed (retrying)", result);
-        HAL_Delay(100);  // Wait 100ms before retry
+        #ifdef DEBUG_MPU6050_DMP
+        printf("MPU6050 DMP Init failed (retrying), Status=0x%X\r\n", result);
+        #endif
+        HAL_Delay(MPU6050_INIT_RETRY_DELAY_MS);  // Wait before retry
       }
     } else {
-      dataUart_PrintInitError("MPU6050 not found (retrying)", 0);
-      HAL_Delay(100);  // Wait 100ms before retry
+      #ifdef DEBUG_MPU6050_DMP
+      printf("MPU6050 not found (retrying)\r\n");
+      #endif
+      HAL_Delay(MPU6050_INIT_RETRY_DELAY_MS);  // Wait before retry
     }
     HAL_IWDG_Refresh(&hiwdg1);  // Refresh watchdog during init
   }
-  dataUart_SendString("MPU6050 initialized successfully!\r\n");
-
-  /* Cache module data pointers for efficiency */
-  static const IR_t *irDataPtr;
-  static const MPU6050_DMP_t *mpuDataPtr;
-  static const Xsound_t *xsoundDataPtr;
-  irDataPtr = IR_GetData();
-  mpuDataPtr = MPU6050DMP_GetData();
-  xsoundDataPtr = Xsound_GetData();
+  #ifdef DEBUG_MPU6050_DMP
+  printf("MPU6050 initialized successfully!\r\n");
+  #endif
 
   /* Create module data struct once */
   static ModuleData_t moduleData;
-  moduleData.irData = irDataPtr;
-  moduleData.mpuData = mpuDataPtr;
-  moduleData.xsoundData = xsoundDataPtr;
+  moduleData.irData = IR_GetData();
+  moduleData.mpuData = MPU6050DMP_GetData();
+  moduleData.xsoundData = Xsound_GetData();
+  moduleData.grayscaleData = Grayscale_GetData();
 
-  // Button
+  /* Initialize button module */
   Button_Init();
-  // 重命名按钮（可选）
   #ifdef DEBUG_BUTTON
   Button_SetButtonName(0, "START_BTN");
   Button_SetButtonName(1, "STOP_BTN");
+  Button_SetButtonName(2, "RESET_YAW_BTN");
+  // Button_SetButtonName(3, "RESET_SYS_BTN");
   #endif
   HAL_TIM_Base_Start_IT(&htim7);
 
-  // Motors
+  /* Initialize motor control */
   Mtrs_Init();
 
-  // Soccer初始化
+  /* Initialize soccer control logic */
   SoccerInit();
   
-  // 检查是否因IWDG复位 - 如果是，自动启动系统
+  /* Check for IWDG reset - auto-start system if reset occurred */
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDG1RST)) {
-    // IWDG复位 - 自动启动系统
-    __HAL_RCC_CLEAR_RESET_FLAGS();  // 清除复位标志
-    dataUart_SendString("IWDG Reset detected - Auto-starting system...\r\n");
+    /* IWDG reset detected - auto-start system */
+    __HAL_RCC_CLEAR_RESET_FLAGS();
+    dataUart_SendString("IWDG Reset Detected - Auto Starting System\r\n");
     Soccer_StartSystem();
     HAL_GPIO_WritePin(GPIOB, LED_4_Pin, GPIO_PIN_SET);
   } else {
-    // 正常启动 - 等待按钮按下
+    /* Normal startup - wait for button press */
     Soccer_WaitForStart();
   }
 
@@ -319,9 +286,8 @@ int main(void)
     HAL_IWDG_Refresh(&hiwdg1);  // Refresh watchdog to prevent reset
     const uint32_t currentTime = HAL_GetTick();
     /* Status LED heartbeat (non-blocking) */
-    if (currentTime - lastLedToggleTime >= LED_HEARTBEAT_MS) {
+    if (TIME_DIFF(currentTime, lastLedToggleTime) >= LED_HEARTBEAT_MS) {
       HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
-      // dataUart_SendString("Heartbeat - System is alive\r\n");
       lastLedToggleTime = currentTime;
     }
 
@@ -329,31 +295,17 @@ int main(void)
     updateData();
 
     /* Print MPU6050 Euler angles */
-    #ifdef DEBUG_MPU6050_DMP
     if (Soccer_IsSystemStarted() && MPU6050_DMP_IsDataReady()) {
-      char msg[80];
-      snprintf(msg, sizeof(msg), "Euler: Roll=%.2f Pitch=%.2f Yaw=%.2f\r\n",
-               mpuDataPtr->euler.roll, mpuDataPtr->euler.pitch, mpuDataPtr->euler.yaw);
-      dataUart_SendString(msg);
+      dataUart_PrintMPU6050Euler(moduleData.mpuData);
     }
-    #endif
-
-    // char msg[100];
-    // int offset = snprintf(msg, sizeof(msg), "Grayscale: ");
-    // for (int i = 0; i < GRAYSCALE_NUM; i++) {
-    //   uint16_t value = getGrayscaleValue(i);
-    //   offset += snprintf(msg + offset, sizeof(msg) - offset, "%u ", value);
-    // }
-    // snprintf(msg + offset, sizeof(msg) - offset, "\r\n");
-    // dataUart_SendString(msg);
 
     /* Process data in soccer module */
-    // soccer_ProcessData(&moduleData);
+    soccer_ProcessData(&moduleData);
 
     // mtrs_Set4Speed(0, 0, 0, 100);
     // polarMove(0, 40);
     
-    HAL_Delay(MAIN_LOOP_DELAY_MS);
+    // HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

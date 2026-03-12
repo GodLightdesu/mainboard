@@ -1,8 +1,23 @@
 # 通用 I2C 狀態機使用指南
 
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)]()
+[![I2C](https://img.shields.io/badge/interface-I2C-green.svg)]()
+
 本指南說明如何使用通用 I2C 狀態機框架創建新的 I2C 模組。
 
-## 概述
+## 📋 目錄
+
+- [概述](#概述)
+- [架構](#架構)
+- [主要特性](#主要特性)
+- [快速開始](#快速開始)
+- [完整範例](#完整範例)
+- [調試配置](#調試配置)
+- [故障排除](#故障排除)
+
+---
+
+## 📝 概述
 
 通用 I2C 狀態機（`i2c_common.h/c`）提供：
 - ✅ **全局總線管理器**：多模組共享 I2C 協調機制
@@ -226,7 +241,10 @@ int main(void) {
   
   /* 現在初始化使用 hi2c3 的模組 */
   IR_Init(&hi2c3);
-  MPU6050_init(&hi2c3);
+  Xsound_Init(&hi2c3);
+  
+  /* MPU6050 使用專用的 I2C2（不共享）*/
+  MPU6050_DMP_Init();
   
   // ... 其余初始化 ...
 }
@@ -590,3 +608,32 @@ I2C_Module_Process(&IR.i2cModule);
 ## 總結
 
 通用 I2C 狀態機為 I2C 模組提供了強大、經過測試的框架。通過使用回調進行數據處理，每個模組在受益於共享狀態機邏輯的同時保留對其數據的完全控制。
+
+---
+
+## 🔧 故障排除
+
+詳細的故障排除指南請參閱 [I2C_ERROR_TROUBLESHOOTING.md](I2C_ERROR_TROUBLESHOOTING.md)
+
+### 快速檢查清單
+
+- ✅ DMA 緩衝區位於 0x30000000 (SRAM_D2)
+- ✅ 緩衝區 32-byte 對齊
+- ✅ MPU 配置禁用 D2 域快取
+- ✅ 所有共享 I2C 的模組使用相同總線管理器
+- ✅ 回調在 ISR 中正確調用
+- ✅ `DEBUG_I2C` 啟用以查看調試訊息
+
+---
+
+## 📚 參考資料
+
+- [I2C_ERROR_TROUBLESHOOTING.md](I2C_ERROR_TROUBLESHOOTING.md) - I2C 錯誤排除詳細指南
+- [DEBUG_SYSTEM.md](DEBUG_SYSTEM.md) - 調試系統使用指南
+- [STM32H7 參考手冊](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf) - I2C 外設詳細說明
+
+---
+
+**版本**: 2.3.0  
+**最後更新**: 2026年3月12日  
+**平台**: STM32H750XX

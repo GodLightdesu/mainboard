@@ -1,18 +1,21 @@
 #ifndef DATAPRINT_H
 #define DATAPRINT_H
 
-#include "main.h"
-#include "usart.h"
-#include "string.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "ir.h"
-// Forward declaration to avoid circular include
-struct Button_t;
+#include <string.h>
+
+#include "usart.h"
+#include "const.h"
+
+// Forward declarations to avoid circular dependencies
+// Each module header is included only in the .c file where implementation needs it
+typedef struct IR_t IR_t;
 typedef struct Button_t Button_t;
-struct Xsound_t;
 typedef struct Xsound_t Xsound_t;
+typedef struct Grayscale_t Grayscale_t;
+typedef struct MPU6050_DMP_t MPU6050_DMP_t;
 
 void dataUart_Init(UART_HandleTypeDef *huart);
 void dataUart_SendString(const char *str);
@@ -27,6 +30,12 @@ void dataUart_PrintIRData(const IR_t *IR_Module);
 
 // Xsound debug functions
 void dataUart_PrintXsoundData(const Xsound_t *xsound);
+
+// Grayscale debug functions
+void dataUart_PrintGrayscaleData(const Grayscale_t *grayscale);
+
+// MPU6050 debug functions
+void dataUart_PrintMPU6050Euler(const MPU6050_DMP_t *mpuData);
 
 // Motor debug functions
 void dataUart_PrintMotorTest(int motorId);

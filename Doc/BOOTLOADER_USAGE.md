@@ -1,5 +1,8 @@
 # STM32H750 Bootloader 跳轉使用指南
 
+[![STM32](https://img.shields.io/badge/STM32-H750VBT6-blue.svg)]()
+[![Bootloader](https://img.shields.io/badge/feature-bootloader-orange.svg)]()
+
 本文檔詳細說明 STM32H750 主控板的系統 Bootloader 跳轉功能，包括實現原理、使用方法和技術細節。
 
 ---

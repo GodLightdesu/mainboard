@@ -1,8 +1,219 @@
-# STM32H750 主控板專案
+# STM32H750 足球機器人主控板
 
-這是一個基於 STM32H750 微控制器的主控板韌體專案，用於控制多馬達機器人系統並整合 IR 感測器陣列。
+[![STM32](https://img.shields.io/badge/STM32-H750VBT6-blue.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32h750vb.html)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
-## 🎉 最新更新 (v2.8.0 - 2026-02-15)
+基於 STM32H750VBT6 (480MHz Cortex-M7) 的四輪 Mecanum 輪足球機器人主控板韌體專案。
+
+## 📋 目錄
+
+- [專案概述](#專案概述)
+- [硬體規格](#硬體規格)
+- [軟體架構](#軟體架構)
+- [快速開始](#快速開始)
+- [最新更新](#最新更新)
+- [文檔](#文檔)
+- [開發指南](#開發指南)
+
+---
+
+## 📝 專案概述
+
+這是一個完整的足球機器人控制系統，整合了多種感測器和致動器：
+
+### 主要功能
+- 🎯 **紅外線球位偵測**：14 眼 IR 感測器陣列，360° 球位追蹤
+- 🧭 **姿態控制**：MPU6050 DMP 提供精準的偏航角控制
+- 🔊 **超音波測距**：4 方向 Xsound 感測器，邊界檢測
+- ⚫ **灰階感測器**：6 個灰階感測器，場地邊界識別
+- 🚗 **Mecanum 輪控制**：4 輪全向移動，任意方向移動
+- 🎮 **按鈕控制**：4 個按鈕支持系統啟動/停止/重置
+- 🐕 **看門狗**：IWDG 防止系統死鎖，自動重啟
+- 🔄 **Bootloader 跳轉**：支持系統 Bootloader 更新固件
+
+---
+
+## 🔧 硬體規格
+
+### 微控制器
+- **型號**: STM32H750VBT6
+- **核心**: ARM Cortex-M7 @ 480MHz
+- **Flash**: 128KB (外部 Flash 支持)
+- **RAM**: 1MB (包含 DTCM、SRAM1-3、D2、D3)
+- **封裝**: LQFP100
+
+### 外設配置
+| 外設 | 用途 | 接口 |
+|------|------|------|
+| I2C2 | MPU6050 姿態感測器 | PB10/PB11 |
+| I2C3 | IR 感測器 (雙從機) + Xsound | PA8/PC9 |
+| UART4 | 除錯輸出 (printf) | PA0/PA1 @ 9600 |
+| UART5/7/8 | 保留通訊 | - |
+| TIM1/2/3/4 | 4 個馬達 PWM 控制 | 各 2 通道 |
+| TIM7 | 按鈕掃描定時器 | 1ms 中斷 |
+| ADC1/3 | 6 個灰階感測器 | 差分輸入 |
+| IWDG1 | 看門狗 | - |
+| DMA | I2C/UART/ADC 傳輸 | - |
+
+---
+
+## 🏗️ 軟體架構
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Main Loop                        │
+│  - 看門狗喂狗                                       │
+│  - 更新感測器數據                                   │
+│  - 處理足球邏輯                                     │
+│  - LED 心跳                                         │
+└──────────────┬──────────────────────────────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+      ▼                 ▼
+┌───────────┐     ┌───────────┐
+│ 感測器層  │     │ 控制層    │
+├───────────┤     ├───────────┤
+│ • IR      │     │ • Soccer  │
+│ • MPU6050 │     │   狀態機  │
+│ • Xsound  │     │ • PID     │
+│ • 灰階    │     │ • Motors  │
+│ • Button  │     │ • Button  │
+└─────┬─────┘     └─────┬─────┘
+      │                 │
+      └────────┬────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────┐
+│                   HAL 層                            │
+│  I2C • UART • TIM • ADC • GPIO • DMA • IWDG        │
+└─────────────────────────────────────────────────────┘
+```
+
+### 狀態機設計
+
+足球控制邏輯使用有限狀態機 (FSM)：
+
+```
+IDLE ──長按啟動──▶ SEARCH_BALL ◀──────┐
+                      │              │
+                  偵測到球          失去球
+                      │              │
+                      ▼              │
+                  CHASE_BALL ────────┘
+                      │
+                  偏航角過大
+                      │
+                      ▼
+                  ALIGN_YAW
+                      │
+                  對齊完成
+                      │
+                      └──────────▶ SEARCH_BALL
+```
+
+---
+
+## 🚀 快速開始
+
+### 環境需求
+- **編譯器**: ARM GCC (arm-none-eabi-gcc)
+- **構建工具**: CMake 3.22+
+- **燒錄工具**: STM32CubeProgrammer
+- **IDE (可選)**: VSCode + Cortex-Debug
+
+### 編譯步驟
+
+```bash
+# 1. 進入專案目錄
+cd /Users/GodLight/stm32project/mainboard
+
+# 2. 配置 CMake
+mkdir -p build && cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+
+# 3. 編譯
+make -j4
+
+# 4. 生成 .hex 和 .bin 檔案
+arm-none-eabi-objcopy -O ihex mainboard.elf mainboard.hex
+arm-none-eabi-objcopy -O binary mainboard.elf mainboard.bin
+```
+
+### 燒錄
+
+#### 方法 1: VSCode 任務 (推薦)
+```bash
+# 按 Cmd+Shift+P，選擇 "Tasks: Run Task"
+# 選擇 "Build + Flash"
+```
+
+#### 方法 2: 命令行
+```bash
+STM32_Programmer_CLI --connect port=swd \
+  --download build/mainboard.elf -hardRst -rst --start
+```
+
+### 調試配置
+
+在 `CMakeLists.txt` 中啟用調試宏：
+
+```cmake
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    DEBUG_GENERAL      # 通用調試信息
+    DEBUG_SOCCER       # 狀態機調試
+    DEBUG_BUTTON       # 按鈕事件
+    # DEBUG_IR         # IR 感測器數據
+    # DEBUG_MPU6050_DMP # MPU6050 姿態
+)
+```
+
+詳見 [調試系統指南](Doc/DEBUG_SYSTEM.md)
+
+---
+
+## 🎉 最新更新 (v2.9.0 - 2026-03-12)
+
+### 📟 Printf 調試系統優化
+
+- **標準 Printf 支持**：完整整合標準 C 庫 printf() 函數
+  - 覆寫 `_write()` 實現批次 UART 傳輸（**主要路徑**）
+  - 覆寫 `__io_putchar()` 提供 putchar() 支持（**備用路徑**）
+  - 自動重定向到 UART4（9600 baud）
+- **調用鏈優化**：
+  - `printf()` → `_write()` → 批次傳輸（快）
+  - `putchar()` → `__io_putchar()` → 單字符傳輸（慢但必要）
+  - 覆寫 syscalls.c weak 實現，避免逐字符循環
+- **性能提升 10 倍**：
+  - 批次傳輸：100 字節僅需 ~104ms（1 次 UART 調用）
+  - 字符模式：100 字節需要 ~1040ms（100 次 UART 調用）
+- **超時策略優化**：
+  - `_write()`：500ms 支持長訊息（~480 字節）
+  - `__io_putchar()`：50ms 適合單字符（~1ms 實際需求）
+- **Printf 重定向集中化**：將 _write() 和 __io_putchar() 從 main.c 移至 dataPrint.c
+  - 更好的模組化設計
+  - 統一管理 UART 句柄 (`dataUart_huart`)
+  - NULL 檢查防止未初始化使用
+- **全面 DEBUG 宏保護**：所有 printf 調用受對應 DEBUG 宏控制
+  - `DEBUG_GENERAL`：系統重置、IWDG 檢測
+  - `DEBUG_MPU6050_DMP`：MPU6050 初始化與姿態數據
+  - `DEBUG_SOCCER`：狀態機調試
+  - `DEBUG_BUTTON`：按鍵事件與系統啟動
+  - 其他：`DEBUG_IR`, `DEBUG_XS`, `DEBUG_I2C`, `DEBUG_MOTORS`
+- **靈活使用方式**：
+  - 直接使用 `printf()` 配合 `#ifdef DEBUG_XXX`（推薦）
+  - 使用 `dataUart_PrintXXX()` 包裝函數（內建 DEBUG 檢查）
+- **資源優化**：
+  - 禁用所有 DEBUG 宏時僅佔用 ~2.1 KB
+  - 啟用所有 DEBUG 宏約 3-5 KB
+  - 無需手動管理緩衝區
+
+詳見 [Doc/DEBUG_SYSTEM.md](Doc/DEBUG_SYSTEM.md)
+
+---
+
+## 📜 歷史更新 (v2.8.0 - 2026-02-15)
 
 ### 🚀 系統 Bootloader 跳轉功能
 
@@ -38,9 +249,10 @@
 ### 🐕 看門狗保護系統
 
 - **獨立看門狗 (IWDG) 整合**：使用 LSI 32kHz 時鐘源
-  - Prescaler: 256 分頻
-  - Reload 值: 4095
-  - 看門狗超時時間: 約 32.768 秒
+  - IWDG 時鐘: 125 Hz (LSI ÷ 256)
+  - 計數器週期: 8 ms 每個計數
+  - Reload 值: 625
+  - 看門狗超時時間: 5.0 秒 (625 + 1) × 8 ms = 5,008 ms
 - **自動刷新機制**：在主循環中定期刷新看門狗，防止系統重置
 - **等待啟動保護**：在 `Soccer_WaitForStart()` 中持續刷新看門狗
   - 防止系統等待按鍵啟動時被看門狗重置
@@ -58,7 +270,9 @@
   - 事件驅動設計：CLICK、DOUBLE_CLICK、LONG_PRESS 等
 - **系統控制整合**：與足球機器人控制系統完全整合
   - Button 1：啟動機器人 (長按)
-  - Button 2：緊急停止 (雙擊)
+  - Button 2：緊急停止 (單擊)
+  - Button 3：重置偏航角 (單擊)
+  - Button 4：系統重啟 (長按)
 - **調試支持**：完整的 UART 調試輸出和狀態監控
 
 ### 🚀 ARM CMSIS DSP 效能優化
@@ -260,13 +474,15 @@
 
 - **完整狀態機**：支援消抖、單擊、雙擊、長按等多種按鍵事件
 - **8 個按鍵支持**：配置在 GPIOD 和 GPIOC 上
-  - Button 1: 啟動按鈕 (GPIOD)
-  - Button 2: 緊急停止按鈕 (GPIOD)
-  - Button 3-8: 擴展控制按鈕
+  - Button 1: 啟動按鈕 (長按) - GPIOD
+  - Button 2: 緊急停止按鈕 (單擊) - GPIOD
+  - Button 3: 重置偏航角 (單擊) - GPIOD
+  - Button 4: 系統重啟 (長按) - GPIOD
+  - Button 5-8: 擴展控制按鈕
 - **事件驅動設計**：
   - `CLICK`: 單擊事件
-  - `DOUBLE_CLICK`: 雙擊事件（緊急停止）
-  - `LONG_PRESS_START/END`: 長按開始/結束（啟動控制）
+  - `DOUBLE_CLICK`: 雙擊事件
+  - `LONG_PRESS_START/END`: 長按開始/結束
   - `LONG_PRESS_HOLD`: 長按保持
 - **系統整合**：與足球機器人控制系統完全整合
 - **調試支持**：完整的 UART 調試輸出和狀態監控
@@ -404,21 +620,30 @@ Task: Build + Flash
 
 ## ⚙️ 硬體配置
 
+### I2C2 配置
+
+- **用途**: MPU6050 IMU (姿態感測器)
+- **MPU6050**: 0x68
+- **DMA**: DMA1 Stream (RX/TX)
+- **緩衝區**: 0x30000000 + offset (SRAM_D2, 非快取)
+- **狀態機**: 使用阻塞式讀取 (MPU6050_DMP)
+
 ### I2C3 配置
 
-- **用途**: IR 感測器（2個從機）+ MPU6050 IMU
+- **用途**: IR 感測器（2個從機）+ Xsound 超音波
 - **IR 從機 1**: 0x30 (7個感測器)
 - **IR 從機 2**: 0x31 (7個感測器)
-- **MPU6050**: 0x68
+- **Xsound**: 0x50 (4方向超音波)
 - **DMA**: DMA1 Stream 0/1 (RX/TX)
 - **緩衝區**: 0x30000000 (SRAM_D2, 非快取)
 - **狀態機**: 使用 `i2c_common` 通用框架
 - **記憶體配置**:
   ```
-  0x30000000: IR Slave 1 RX  (16B, 32B aligned)
-  0x30000020: IR Slave 2 RX  (16B, 32B aligned)
-  0x30000040: MPU6050 TX     (1B,  32B aligned)
-  0x30000060: MPU6050 RX     (14B, 32B aligned)
+  0x30000000: IR Slave 1 RX    (16B, 32B aligned)
+  0x30000020: IR Slave 2 RX    (16B, 32B aligned)
+  0x30000040: MPU6050 RX       (14B, 32B aligned)
+  0x30000060: Grayscale ADC    (10B, 32B aligned)
+  0x30000080: Xsound RX        (16B, 32B aligned)
   ```
 
 ### 定時器配置
@@ -539,7 +764,10 @@ int main(void) {
   
   /* 🔑 步驟 2: 初始化使用 hi2c3 的模組 */
   IR_Init(&hi2c3);       // IR 模組使用 hi2c3
-  MPU6050_init(&hi2c3);  // MPU6050 模組也使用 hi2c3
+  Xsound_Init(&hi2c3);   // Xsound 模組也使用 hi2c3
+  
+  /* MPU6050 單獨使用 hi2c2，不需要總線管理器 */
+  MPU6050_DMP_Init();    // MPU6050 使用 hi2c2 (阻塞式讀取)
   
   // ... 其他初始化 ...
 }
@@ -850,9 +1078,9 @@ int main(void) {
     I2C_BusManager_t i2c3_bus;
     I2C_Bus_Init(&i2c3_bus, &hi2c3);
     
-    IR_Init(&hi2c3);           /* IR sensor module */
-    MPU6050_Init(&hi2c3);      /* MPU6050 IMU module */
-    MPU6050_DMP_Init(&hi2c3, DMP_FEATURE_6X_LP_QUAT);
+    IR_Init(&hi2c3);           /* IR sensor module (uses shared I2C3) */
+    Xsound_Init(&hi2c3);       /* Xsound ultrasonic module (uses shared I2C3) */
+    MPU6050_DMP_Init();        /* MPU6050 IMU module (uses dedicated I2C2 with blocking reads) */
     Mtrs_Init();               /* Motor control */
     
     /* Cache module data pointers for efficiency */
@@ -1041,15 +1269,25 @@ PWM: 420 (42.0%)
 - 檢查 `bufferSize` 是否正確
 - 確認 CPU 快取設定 (MPU_Config)
 
-## 📖 相關文件
+## 📖 文檔
 
-- [BOOTLOADER_USAGE.md](Doc/BOOTLOADER_USAGE.md) - 🆕 系統 Bootloader 跳轉使用指南
-- [DEBUG_SYSTEM.md](Doc/DEBUG_SYSTEM.md) - 🆕 調試系統使用指南
-- [I2C_COMMON_USAGE.md](Doc/I2C_COMMON_USAGE.md) - 通用 I2C 狀態機使用指南
-- [I2C_Communication_Setup_Guide.md](Doc/I2C_Communication_Setup_Guide.md) - I2C 硬體與軟體設定詳解
-- [I2C_MASTER_USAGE.md](Doc/I2C_MASTER_USAGE.md) - ⚠️ 已棄用，參考 I2C_COMMON_USAGE.md
-- [STM32H750 資料手冊](https://www.st.com/resource/en/datasheet/stm32h750xb.pdf)
-- [STM32H7 參考手冊](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+### 🔧 使用指南
+| 文檔 | 描述 | 狀態 |
+|------|------|------|
+| [DEBUG_SYSTEM.md](Doc/DEBUG_SYSTEM.md) | 調試系統使用指南 (Printf 重定向、DEBUG 宏) | ✅ 最新 |
+| [BOOTLOADER_USAGE.md](Doc/BOOTLOADER_USAGE.md) | 系統 Bootloader 跳轉使用指南 | ✅ 最新 |
+| [I2C_COMMON_USAGE.md](Doc/I2C_COMMON_USAGE.md) | 通用 I2C 狀態機框架使用指南 | ✅ 最新 |
+| [I2C_ERROR_TROUBLESHOOTING.md](Doc/I2C_ERROR_TROUBLESHOOTING.md) | I2C 錯誤診斷和解決方案 | ✅ 最新 |
+
+### 📋 變更日誌
+- [CHANGELOG.md](CHANGELOG.md) - 詳細版本更新記錄
+
+### 🔗 外部資源
+- [STM32H750 數據手冊](https://www.st.com/resource/en/datasheet/stm32h750xb.pdf) - 官方規格文檔
+- [STM32H7 參考手冊](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf) - 寄存器級詳細說明
+- [ARM Cortex-M7 技術參考手冊](https://developer.arm.com/documentation/ddi0489/d/) - 處理器核心架構
+
+---
 
 ## 🔍 系統配置細節
 

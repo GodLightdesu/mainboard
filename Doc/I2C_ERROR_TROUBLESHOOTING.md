@@ -1,6 +1,24 @@
 # I2C 錯誤排除指南
 
-## 問題描述
+[![I2C](https://img.shields.io/badge/interface-I2C-green.svg)]()
+[![Troubleshooting](https://img.shields.io/badge/type-troubleshooting-red.svg)]()
+
+本文檔提供常見 I2C 通訊錯誤的診斷和解決方案。
+
+## 📋 目錄
+
+- [常見錯誤代碼](#常見錯誤代碼)
+- [可能的原因](#可能的原因)
+- [修復內容](#修復內容)
+- [排除步驟](#排除步驟)
+- [常見問題](#常見問題)
+- [參考資料](#參考資料)
+
+---
+
+## ⚠️ 常見錯誤代碼
+
+### 問題描述
 系統報告 I2C 錯誤：
 ```
 I2C_Error: Code=0x1, Slave=1
@@ -77,8 +95,8 @@ I2C_Error: Code=0x1, Slave=0
 IR_SetSlaveEnabled(IR_SLAVE_1, false);
 IR_SetSlaveEnabled(IR_SLAVE_2, false);
 
-// 或註釋掉 MPU6050 初始化
-// MPU6050_init(&hi2c3);
+// 或註釋掉 MPU6050 初始化（MPU6050 在 I2C2 上）
+// MPU6050_DMP_Init();
 ```
 
 ### 步驟 3: 調整 I2C 時鐘速度
