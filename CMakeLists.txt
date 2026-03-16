@@ -69,6 +69,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/I2C/i2c_common.c # I2C通信模块
     Libraries/Uart/dataPrint.c # UART数据收发
     Libraries/Button/button.c # 按键处理模块
+    Libraries/LED/led.c # LED控制模块
 
     # Libraries/Module/MPU6050/MPU6050.c # MPU6050传感器驱动
     # Libraries/Module/MPU6050/MPU6050_DMP.c # MPU6050 DMP功能
@@ -83,7 +84,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/Module/Grayscale/grayscale.c # 灰度传感器
     Libraries/Module/IR/ir.c # 红外传感器
     Libraries/PID/PID.c # PID控制器
-    Libraries/soccer.c # 主控制逻辑
+    Libraries/soccer/soccer.c # 主控制逻辑
+    Libraries/Soccer/attack/attack.c # 进攻模式实现
+    Libraries/Soccer/defense/defense.c # 防守模式实现
 
     # CMSIS-DSP 源文件
     ${CMSIS_DSP_SOURCES}
@@ -96,6 +99,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     # 用户自定义头文件路径
     Core/Inc # 主程序头文件
+    Libraries/Soccer # 足球机器人状态机头文件
+    Libraries/Soccer/attack # 进攻模式头文件
+    Libraries/Soccer/defense # 防守模式头文件
     Libraries/Button # 按键模块头文件
     Libraries/PID # PID控制器头文件
     Libraries/Module/IR # 红外传感器头文件
@@ -108,6 +114,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/Module/Grayscale # 灰度传感器头文件
     Libraries/Uart # UART相关头文件
     Libraries/I2C # I2C相关头文件
+    Libraries/LED # LED控制头文件
     Libraries/ # 库根目录
 
     # STM32 HAL 驱动头文件
@@ -131,14 +138,16 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     DEBUG_GENERAL # 启用通用调试信息输出
     DEBUG_BUTTON # 启用按键调试信息输出
 
-    # DEBUG_SOCCER # 启用足球机器人状态机调试信息输出
+    DEBUG_SOCCER # 启用足球机器人状态机调试信息输出
+
+    # DEBUG_CAM # 启用摄像头调试信息
 
     # DEBUG_IR # 启用红外传感器调试信息
     # DEBUG_XS # 启用Xsound传感器调试信息
-    # DEBUG_GRAYSCALE # 启用灰度传感器调试信息
+    DEBUG_GRAYSCALE # 启用灰度传感器调试信息
 
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
-    DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
+    # DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试
     # DEBUG_I2C # I2C通信错误和状态调试
 
     # DEBUG_MOTORS         # 电机测试PWM值调试

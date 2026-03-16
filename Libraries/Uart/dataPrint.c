@@ -5,6 +5,7 @@
 #include "grayscale.h"
 #include "button.h"
 #include "xsound.h"
+#include "cam.h"
 #include "ir.h"
 
 /* Static UART handle pointer */
@@ -109,7 +110,7 @@ void dataUart_PrintXsoundData(const Xsound_t *xsound) {
 void dataUart_PrintGrayscaleData(const Grayscale_t *grayscale) {
 #ifdef DEBUG_GRAYSCALE
   if (grayscale == NULL) return;
-  
+  grayscaleCombine();
   printf("Grayscale: ");
   for (int i = 0; i < GRAYSCALE_NUM; i++) {
     printf("%u ", grayscale->values[i]);
@@ -117,6 +118,51 @@ void dataUart_PrintGrayscaleData(const Grayscale_t *grayscale) {
   printf("\r\n");
 #else
   (void)grayscale;
+#endif
+}
+
+
+void dataUart_PrintGrayscaleLineInfo(const GrayscaleLineInfo_t *lineInfo) {
+#ifdef DEBUG_GRAYSCALE
+  
+  if (Grayscale_IsCalibrated())
+  {
+    const GrayscaleLineInfo_t *gsInfo = Grayscale_GetLineInfo();
+    const Grayscale_t *gsData = Grayscale_GetData();
+    printf("GS all=%d | onLine : %d,%d,%d,%d,%d,%d | S0~S5: %u,%u,%u,%u,%u,%u | raw S0~S5: %u,%u,%u,%u,%u,%u\r\n",
+      Grayscale_IsOnWhiteLine(),
+      Grayscale_IsSensorOnWhiteLine(0),
+      Grayscale_IsSensorOnWhiteLine(1),
+      Grayscale_IsSensorOnWhiteLine(2),
+      Grayscale_IsSensorOnWhiteLine(3),
+      Grayscale_IsSensorOnWhiteLine(4),
+      Grayscale_IsSensorOnWhiteLine(5),
+      gsInfo->strengths[0],
+      gsInfo->strengths[1],
+      gsInfo->strengths[2],
+      gsInfo->strengths[3],
+      gsInfo->strengths[4],
+      gsInfo->strengths[5],
+      gsData->values[0],
+      gsData->values[1],
+      gsData->values[2],
+      gsData->values[3],
+      gsData->values[4],
+      gsData->values[5]
+    );
+  }
+#else
+  (void)lineInfo;
+#endif
+}
+
+// Cam debug functions
+void dataUart_PrintCamData(const Cam_t *cam) {
+#ifdef DEBUG_CAM
+  if (cam == NULL) return;
+  printf("Cam Angle: %.2f\r\n", cam->received_angle);
+#else
+  (void)cam;
 #endif
 }
 

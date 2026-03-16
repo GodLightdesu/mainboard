@@ -32,6 +32,7 @@
 
 // Modules' headers
 #include "ir.h"
+#include "cam.h"
 #include "motors.h"
 #include "button.h"
 #include "xsound.h"
@@ -40,6 +41,7 @@
 #include "dataPrint.h"
 #include "soccer.h"
 #include "const.h"
+#include "led.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -197,11 +199,10 @@ int main(void)
   MX_IWDG1_Init();
   /* USER CODE BEGIN 2 */
   /* Initialize status LEDs */
-  HAL_GPIO_WritePin(GPIOD, LED_1_Pin | LED_2_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOB, LED_3_Pin | LED_4_Pin, GPIO_PIN_SET);
+  LED_SetAll(true);
 
   /* Initialize application modules */
-  dataUart_Init(&huart4);    /* UART for data output */
+  dataUart_Init(&huart4); /* UART for data output */
 
   HAL_Delay(I2C_INIT_DELAY_MS); // wait 10ms
 
@@ -213,10 +214,13 @@ int main(void)
 
   /* Initialize IR sensor module with I2C peripheral */
   IR_Init(&hi2c3);
-  
+
   /* Initialize Xsound sensor module with I2C peripheral */
   Xsound_Init(&hi2c3);
-  
+
+  /* Initialize Camera module with UART peripheral */
+  cam_init(&huart8);
+
   /* Initialize MPU6050 with retry loop */
   uint16_t addr = 0x68;     // mpu6050
   int result = -1;
@@ -244,8 +248,9 @@ int main(void)
   /* Create module data struct once */
   static ModuleData_t moduleData;
   moduleData.irData = IR_GetData();
-  moduleData.mpuData = MPU6050DMP_GetData();
+  moduleData.camData = Cam_GetData();
   moduleData.xsoundData = Xsound_GetData();
+  moduleData.mpuData = MPU6050DMP_GetData();
   moduleData.grayscaleData = Grayscale_GetData();
 
   /* Initialize button module */
@@ -254,7 +259,7 @@ int main(void)
   Button_SetButtonName(0, "START_BTN");
   Button_SetButtonName(1, "STOP_BTN");
   Button_SetButtonName(2, "RESET_YAW_BTN");
-  // Button_SetButtonName(3, "RESET_SYS_BTN");
+  Button_SetButtonName(3, "GS_SCAN_BTN");
   #endif
   HAL_TIM_Base_Start_IT(&htim7);
 
@@ -262,15 +267,15 @@ int main(void)
   Mtrs_Init();
 
   /* Initialize soccer control logic */
-  SoccerInit();
-  
+  SoccerInit(MODE_OFFENSIVE);
+
   /* Check for IWDG reset - auto-start system if reset occurred */
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDG1RST)) {
     /* IWDG reset detected - auto-start system */
     __HAL_RCC_CLEAR_RESET_FLAGS();
     dataUart_SendString("IWDG Reset Detected - Auto Starting System\r\n");
     Soccer_StartSystem();
-    HAL_GPIO_WritePin(GPIOB, LED_4_Pin, GPIO_PIN_SET);
+    LED_Set(LED_4, true);
   } else {
     /* Normal startup - wait for button press */
     Soccer_WaitForStart();
@@ -283,32 +288,27 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    HAL_IWDG_Refresh(&hiwdg1);  // Refresh watchdog to prevent reset
-    const uint32_t currentTime = HAL_GetTick();
-    /* Status LED heartbeat (non-blocking) */
-    if (TIME_DIFF(currentTime, lastLedToggleTime) >= LED_HEARTBEAT_MS) {
-      HAL_GPIO_TogglePin(GPIOD, LED_2_Pin);
-      lastLedToggleTime = currentTime;
-    }
+    // Refresh watchdog to prevent reset
+    HAL_IWDG_Refresh(&hiwdg1);
+
+    // Heartbeat LED flash to indicate system is alive
+    LED_HeartbeatTick(LED_2, &lastLedToggleTime, HAL_GetTick(), LED_HEARTBEAT_MS);
 
     /* Update all sensor data */
     updateData();
 
-    /* Print MPU6050 Euler angles */
-    if (Soccer_IsSystemStarted() && MPU6050_DMP_IsDataReady()) {
-      dataUart_PrintMPU6050Euler(moduleData.mpuData);
-    }
-
     /* Process data in soccer module */
-    soccer_ProcessData(&moduleData);
-
-    // mtrs_Set4Speed(0, 0, 0, 100);
-    // polarMove(0, 40);
+    SoccerProcess(&moduleData);
     
-    // HAL_Delay(MAIN_LOOP_DELAY_MS);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    /* Debug prints for sensor data - enable as needed */
+    // dataUart_PrintMPU6050Euler(moduleData.mpuData);
+    // dataUart_PrintCamData(moduleData.camData);
+    // dataUart_PrintGrayscaleData(moduleData.grayscaleData);
+    // dataUart_PrintGrayscaleLineInfo(Grayscale_GetLineInfo());  
   }
   /* USER CODE END 3 */
 }
