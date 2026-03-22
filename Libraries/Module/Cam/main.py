@@ -1,14 +1,16 @@
 from machine import UART
 import sensor
 import time
+
 import pyb
+
 import math
 import struct
 
 def init():
   sensor.reset()
   sensor.set_pixformat(sensor.RGB565)
-  sensor.set_framesize(sensor.QQVGA)
+  sensor.set_framesize(sensor.QVGA)
   sensor.skip_frames(time=2000)
   sensor.set_auto_gain(False)
   sensor.set_auto_whitebal(False)
@@ -22,7 +24,8 @@ clock = time.clock()
 uart = UART(3, 9600)
 
 # ball = (18, 50, 12, 54, 10, 56)
-blue_goal = (21, 51, -128, 127, -79, -42)
+blue_goal = (13, 29, -128, 2, -128, -6)
+yellow_goal = (56, 89, -128, 127, 44, 127)
 
 data = {}
 
@@ -49,8 +52,8 @@ while True:
   if blobs:
     # use the largest blobs
     largest_blob = max(blobs, key=lambda b: b.pixels())
-    img.draw_rectangle(largest_blob.rect())
-    img.draw_cross(largest_blob.cx(), largest_blob.cy())
+    # img.draw_rectangle(largest_blob.rect())
+    # img.draw_cross(largest_blob.cx(), largest_blob.cy())
 
     # store blob data in a dictionary
     data['x'] = largest_blob.cx()
@@ -66,19 +69,19 @@ while True:
     dx = data['x'] - middle_x
     dy = bottom_y - data['y']
     angle = math.atan2(dx, dy) * 180 / math.pi
-    data['angle'] = angle * -1  # change sign
+    data['angle'] = angle
 
     # draw line from origin to blob center
-    img.draw_cross(middle_x, bottom_y)
-    img.draw_line(middle_x, bottom_y, data['x'], data['y'])
+    # img.draw_cross(middle_x, bottom_y)
+    # img.draw_line(middle_x, bottom_y, data['x'], data['y'])
 
-    B_led.on()
+    G_led.on()
 
   else:
     # if no blobs found, set angle to 999 to indicate no goal found
     data['angle'] = 999
 
-    B_led.off()
+    G_led.off()
 
   # print data to console for debugging
   print(str(data) + '\n')

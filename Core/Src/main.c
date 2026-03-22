@@ -196,7 +196,8 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_TIM7_Init();
-  MX_IWDG1_Init();
+  // MX_IWDG1_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   /* Initialize status LEDs */
   LED_SetAll(true);
@@ -225,7 +226,7 @@ int main(void)
   uint16_t addr = 0x68;     // mpu6050
   int result = -1;
   while (result != 0) {
-    if (I2C_Find(&hi2c2, addr)) {
+    if (I2C_Find(&MPU6050_I2C_HANDLE, addr)) {
       result = MPU6050_DMP_Init();
       if (result != 0) {
         #ifdef DEBUG_MPU6050_DMP
@@ -267,6 +268,7 @@ int main(void)
   Mtrs_Init();
 
   /* Initialize soccer control logic */
+  // SoccerInit(MODE_DEFENSIVE);
   SoccerInit(MODE_OFFENSIVE);
 
   /* Check for IWDG reset - auto-start system if reset occurred */
@@ -297,18 +299,34 @@ int main(void)
     /* Update all sensor data */
     updateData();
 
-    /* Process data in soccer module */
+    // /* Process data in soccer module */
     SoccerProcess(&moduleData);
-    
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
     /* Debug prints for sensor data - enable as needed */
-    // dataUart_PrintMPU6050Euler(moduleData.mpuData);
-    // dataUart_PrintCamData(moduleData.camData);
+    // dataUart_PrintIRData(moduleData.irData);
+    // dataUart_PrintXsoundData(moduleData.xsoundData);
     // dataUart_PrintGrayscaleData(moduleData.grayscaleData);
-    // dataUart_PrintGrayscaleLineInfo(Grayscale_GetLineInfo());  
+    // dataUart_PrintGrayscaleLineInfo(Grayscale_GetLineInfo());
+    // dataUart_PrintCamData(moduleData.camData);
+    // dataUart_PrintMPU6050Euler(moduleData.mpuData);
+
+    // i2c scan
+    // uint16_t addrFound = 0;
+    // I2C_HandleTypeDef testI2C = hi2c3;  // Use I2C3 for scanning
+    // for (uint16_t addr = 1; addr < 128; addr++) {
+    //   if (I2C_Find(&testI2C, addr)) {
+    //     addrFound = addr;
+    //   }
+    // }
+    // if (addrFound == 0) {
+    //   printf("No I2C devices found on i2c3\r\n");
+    // }
+
+    // Test: Move right at half speed
+    // polarMove(90, 50);
   }
   /* USER CODE END 3 */
 }

@@ -3,6 +3,7 @@
 
 #define GRAYSCALE_NUM 6
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -34,6 +35,10 @@ void Grayscale_ReorderValues(const uint16_t *src, uint16_t *dst);
 void Grayscale_Process(void);
 void Grayscale_StartScan(void);
 void Grayscale_StopScan(void);
+bool Grayscale_ApplyCalibration(const uint16_t *minValues,
+                                const uint16_t *maxValues,
+                                const uint16_t *thresholds);
+void Grayscale_PrintCalibrationData(void);
 bool Grayscale_IsScanning(void);
 bool Grayscale_IsCalibrated(void);
 bool Grayscale_IsOnWhiteLine(void);

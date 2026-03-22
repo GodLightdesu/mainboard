@@ -6,6 +6,11 @@
 
 #define QUAT_SCALE 1073741824.0f /**< 2^30 used to convert DMP quaternions to float */
 
+/* Configurable I2C handle for all MPU6050 accesses (default: hi2c2) */
+#ifndef MPU6050_I2C_HANDLE
+#define MPU6050_I2C_HANDLE hi2c2
+#endif
+
 /* Full Scale Range Values - pass these to SetGyroFSR/SetAccelFSR */
 #define GYRO_FSR_250DPS   250   /**< Gyroscope full scale range: ±250 dps */
 #define GYRO_FSR_500DPS   500   /**< Gyroscope full scale range: ±500 dps */
@@ -24,6 +29,7 @@
 #include "arm_math.h"
 #include "inv_mpu.h"
 #include "inv_mpu_dmp_motion_driver.h"
+#include "const.h"
 
 #ifdef DEBUG_I2C
 #include "dataPrint.h"

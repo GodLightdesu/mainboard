@@ -38,9 +38,10 @@
  */
 #if defined STM32_MPU6050
 #include "i2c.h"
+#include "MPU6050DMP.h"
 
-#define i2c_write(mpuaddr, regaddr, dsize, pdata)	HAL_I2C_Mem_Write(&hi2c2, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, 1000)
-#define i2c_read(mpuaddr, regaddr, dsize, pdata)    HAL_I2C_Mem_Read(&hi2c2, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, 1000)
+#define i2c_write(mpuaddr, regaddr, dsize, pdata)	HAL_I2C_Mem_Write(&MPU6050_I2C_HANDLE, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, 1000)
+#define i2c_read(mpuaddr, regaddr, dsize, pdata)    HAL_I2C_Mem_Read(&MPU6050_I2C_HANDLE, (mpuaddr << 1), regaddr, I2C_MEMADD_SIZE_8BIT, pdata, dsize, 1000)
 #define delay_ms(ms)   HAL_Delay(ms)
 #define get_ms(p)      do { *p = HAL_GetTick();} while(0)
 #define log_i(...)     do {} while (0)

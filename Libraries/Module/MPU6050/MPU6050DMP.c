@@ -151,7 +151,6 @@ int MPU6050DMP_updateData(void) {
 
     /* Convert quaternion to Euler angles (in degrees)
      * Precompute common terms to avoid redundant calculations */
-    const float RAD_TO_DEG = 57.295779513f;
     const float q0q0 = q0 * q0;
     const float q1q1 = q1 * q1;
     const float q2q2 = q2 * q2;
@@ -196,19 +195,19 @@ int MPU6050DMP_updateData(void) {
 }
 
 void MPU6050DMP_HandleI2CError(void) {
-  uint32_t i2cError = HAL_I2C_GetError(&hi2c3);
-  HAL_I2C_StateTypeDef i2cState = HAL_I2C_GetState(&hi2c3);
-  
-  #ifdef DEBUG_I2C
-  printf("MPU6050 I2C: State=%d, Error=0x%lX, ErrCount=%d\r\n", 
-           i2cState, i2cError, consecutiveI2CErrors);
-  #endif
-  
+  uint32_t i2cError = HAL_I2C_GetError(&MPU6050_I2C_HANDLE);
   if (i2cError != HAL_I2C_ERROR_NONE) {
+    HAL_I2C_StateTypeDef i2cState = HAL_I2C_GetState(&MPU6050_I2C_HANDLE);
+
+    #ifdef DEBUG_I2C
+    printf("MPU6050 I2C: State=%d, Error=0x%lX, ErrCount=%d\r\n",
+             i2cState, i2cError, consecutiveI2CErrors);
+    #endif
+
     consecutiveI2CErrors++;
     // Soft recovery: Clear error flags and reset FIFO
-    HAL_I2C_Master_Abort_IT(&hi2c3, 0x68 << 1);
-    __HAL_I2C_CLEAR_FLAG(&hi2c3, I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_AF | I2C_FLAG_OVR);
+    HAL_I2C_Master_Abort_IT(&MPU6050_I2C_HANDLE, 0x68 << 1);
+    __HAL_I2C_CLEAR_FLAG(&MPU6050_I2C_HANDLE, I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_AF | I2C_FLAG_OVR);
     mpu_reset_fifo();
   } else {
     // No error - reset counter

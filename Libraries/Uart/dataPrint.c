@@ -13,14 +13,20 @@ static UART_HandleTypeDef *dataUart_huart = NULL;
 
 int __io_putchar(int ch)
 {
+#ifdef DEBUG_GENERAL
   if (dataUart_huart == NULL) return -1;
   // Timeout for single character
   HAL_UART_Transmit(dataUart_huart, (uint8_t *)&ch, 1, UART_CHAR_TIMEOUT_MS);
   return ch;
+#else
+  (void)ch;
+  return ch;
+#endif
 }
 
 int _write(int file, char *ptr, int len)
 {
+#ifdef DEBUG_GENERAL
   (void)file;  // Unused parameter
   
   if (dataUart_huart == NULL) return -1;
@@ -30,6 +36,11 @@ int _write(int file, char *ptr, int len)
   HAL_StatusTypeDef status = HAL_UART_Transmit(dataUart_huart, (uint8_t *)ptr, len, UART_BUFFER_TIMEOUT_MS);
   
   return (status == HAL_OK) ? len : -1;
+#else
+  (void)file;
+  (void)ptr;
+  return len;
+#endif
 }
 
 void dataUart_Init(UART_HandleTypeDef *huart) {

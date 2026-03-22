@@ -146,6 +146,15 @@ void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3) {
   }
 }
 
+// True: Clockwise, False: Counterclockwise
+void rotate(int spd, bool dir) {
+  if (dir == true) { // Clockwise
+    mtrs_Set4Speed(-spd, -spd, -spd, -spd);
+  } else { // Counterclockwise
+    mtrs_Set4Speed(spd, spd, spd, spd);
+  }
+}
+
 void polarMove(float angle_deg, uint8_t speed_percent) {
   /* Validate and clamp speed */
   if (speed_percent > MAX_SPEED) speed_percent = MAX_SPEED;

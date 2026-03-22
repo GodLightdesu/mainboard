@@ -2,6 +2,15 @@
 #include "attack.h"
 #include "defense.h"
 
+#define LED_GRAYSCALE_SCAN LED_3
+
+#define ENABLE_MANUAL_GRAYSCALE_CALIBRATION 1
+#if ENABLE_MANUAL_GRAYSCALE_CALIBRATION
+static const uint16_t GS_MIN[GRAYSCALE_NUM] = {18247, 22976, 13701, 22036, 19558, 12710};
+static const uint16_t GS_MAX[GRAYSCALE_NUM] = {38636, 43145, 33270, 42739, 42080, 26584};
+static const uint16_t GS_THD[GRAYSCALE_NUM] = {22324, 27009, 17614, 26176, 24062, 15484};
+#endif
+
 // 系统状态变量
 static volatile bool systemStarted = false;
 static volatile bool emergencyStop = false;
@@ -9,6 +18,7 @@ static volatile bool emergencyStop = false;
 static volatile bool gsToggleRequested = false;
 static Mode_t mode = MODE_DEFENSIVE;
 static uint32_t systemStartTime = 0;
+static uint32_t grayscaleLedLastBlink = 0;
 
 // 车辆旋转对齐PID
 static PID_Controller_t yawAlignPID;
@@ -41,9 +51,9 @@ static void SoccerButtonControl(uint8_t btn_index, BtnEvent_t event) {
   case 2: // 按钮3 - Reset Yaw
     if (event == BTN_EVENT_CLICK) {
       // 单击重置陀螺仪偏航角（如果系统已启动）
-      if (systemStarted) {
-        MPU6050_DMP_ResetYaw();
-      }
+      // if (systemStarted) {
+      MPU6050_DMP_ResetYaw();
+      // }
     } break;
   case 3: // 按钮4 - Grayscale scan start/stop
     if (event == BTN_EVENT_CLICK) {
@@ -60,6 +70,13 @@ void SoccerInit(Mode_t initMode) {
   Button_SetSystemControlCallback(2, SoccerButtonControl);  // 按钮3：reset yaw
   Button_SetSystemControlCallback(3, SoccerButtonControl);  // 按钮4：grayscale scan
 
+  // For testing, start system immediately.
+  // systemStarted = true;
+  // reset all states and flags
+  systemStarted = false;
+  emergencyStop = false;
+  gsToggleRequested = false;
+
   // 初始化模式
   mode = initMode;
   AttackInit();
@@ -67,6 +84,14 @@ void SoccerInit(Mode_t initMode) {
 
   PID_Init(&yawAlignPID, YAW_PID_kp, YAW_PID_ki, YAW_PID_kd,
            INTEGRAL_LIMIT, -60, 60);
+
+#if ENABLE_MANUAL_GRAYSCALE_CALIBRATION
+  if (Grayscale_ApplyCalibration(GS_MIN, GS_MAX, GS_THD)) {
+    printf("[Grayscale] Manual calibration restored.\r\n");
+  } else {
+    printf("[Grayscale] Manual calibration invalid, please re-scan.\r\n");
+  }
+#endif
 }
 
 void updateData(void) {
@@ -75,19 +100,41 @@ void updateData(void) {
     gsToggleRequested = false;  // 重置请求标志
     if (!Grayscale_IsScanning()) {
       Grayscale_StartScan();
+      // 开始扫描时关闭LED
+      LED_Set(LED_GRAYSCALE_SCAN, false);
+      grayscaleLedLastBlink = HAL_GetTick();
+
       #ifdef DEBUG_GRAYSCALE
       printf("[Grayscale] Scan started (pass white line and green ground).\r\n");
       #endif
     } else {
       Grayscale_StopScan();
-      #ifdef DEBUG_GRAYSCALE
+
       if (Grayscale_IsCalibrated()) {
+        // 扫描完成后根据校准结果设置LED状态 (On)
+        LED_Set(LED_GRAYSCALE_SCAN, true);
+
+        Grayscale_PrintCalibrationData();
+        #ifdef DEBUG_GRAYSCALE
         printf("[Grayscale] Scan done. onWhite=%d\r\n", Grayscale_IsOnWhiteLine());
+        #endif
       } else {
+        // 扫描完成但未成功校准，保持LED关闭并提示重新扫描
+        LED_Set(LED_GRAYSCALE_SCAN, false);
+
+        #ifdef DEBUG_GRAYSCALE
         printf("[Grayscale] Scan failed: range too small, rescan with white+green sweep.\r\n");
+        #endif
       }
-      #endif
     }
+  }
+
+  // 如果正在扫描，闪烁LED表示状态
+  if (Grayscale_IsScanning()) {
+    LED_HeartbeatTick(LED_GRAYSCALE_SCAN,
+                      &grayscaleLedLastBlink,
+                      HAL_GetTick(),
+                      LED_HEARTBEAT_MS);
   }
 
   /* Grayscale must keep updating even before system start,
@@ -114,11 +161,7 @@ void SoccerProcess(const ModuleData_t *data) {
     mtrs_StopAll();
     return;
   }
-
-  // TODO: if no ball for long time, switch mode
-  // defensive -> offensive: go to center and look for ball
-  // offensive -> defensive: go back to defensive position (white line in front of the goal)l;.,
-  // can use a timer to track how long since last ball detection, and if exceeds threshold, toggle mode
+  
   Soccer_UpdateMode(data);
 
   // 根据当前模式执行对应的处理函数
@@ -135,7 +178,7 @@ void SoccerProcess(const ModuleData_t *data) {
     break;
   }
 
-  #ifdef DEBUG_SOCCER_
+  #ifdef DEBUG_SOCCER
   static uint32_t lastDebug = 0;
   const uint32_t currentTime = HAL_GetTick();
   if (TIME_DIFF(currentTime, lastDebug) >= DEBUG_PRINT_INTERVAL_MS) {
@@ -143,7 +186,7 @@ void SoccerProcess(const ModuleData_t *data) {
     float yaw = data->mpuData->euler.yaw;
     int irReady = IR_IsDataReady();
     float ballAngle = data->irData->ballAngle;
-    int currentState = (mode == MODE_OFFENSIVE) ? getAttackState() : -1;
+    int currentState = (mode == MODE_OFFENSIVE) ? getAttackState() : getDefenseState();
     printf("IR: rdy=%d ang=%.1f max=%d eye=%d | Yaw=%.1f MPU=%d | State=%d | Mode=%s\r\n",
            irReady, ballAngle, data->irData->maxValue, 
            data->irData->maxEye, yaw, mpuReady, currentState, mode == MODE_OFFENSIVE ? "OFFENSIVE" : "DEFENSIVE");
@@ -157,6 +200,10 @@ void SoccerProcess(const ModuleData_t *data) {
 }
 
 // TODO: 根据传感器数据更新模式（如果需要）
+// if no ball for long time, switch mode
+// defensive -> offensive: go to center and look for ball
+// offensive -> defensive: go back to defensive position (white line in front of the goal)l;.,
+// can use a timer to track how long since last ball detection, and if exceeds threshold, toggle mode
 void Soccer_UpdateMode(const ModuleData_t *data) {
   
 }

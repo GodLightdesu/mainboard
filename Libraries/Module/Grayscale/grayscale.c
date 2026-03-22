@@ -1,6 +1,6 @@
 #include "grayscale.h"
 
-#define GRAYSCALE_THRESHOLD_RATIO_PERCENT 30U
+#define GRAYSCALE_THRESHOLD_RATIO_PERCENT 20U
 // 最小有效讀數差值。若綠地/白線差值很大(如2700)，可提高(100~500)抗雜訊。
 // 若設10也常校正失敗，表示感測器讀值無縮放或硬體異常。
 #define GRAYSCALE_MIN_VALID_RANGE         10U
@@ -10,8 +10,8 @@
 1: ADC1_INP4  (A2)  | Front
 2: ADC1_INP8  (A3)  | Left front
 3: ADC1_INP10 (A4)  | Back
-4: ADC1_INP11 (A5)  | Right front
-5: ADC3_INP1  (A6)  | Right back
+4: ADC1_INP11 (A5)  | Right back
+5: ADC3_INP1  (A6)  | Right front
 */
 
 // DMA buffer uses MPU-configured RAM_D2 memory, defined in const.h
@@ -24,10 +24,11 @@ static GrayscaleLineInfo_t grayscaleLineInfo = {0};
 void Grayscale_ReorderValues(const uint16_t *src, uint16_t *dst) {
   if (src == NULL || dst == NULL) { return; }
 
+  //          0         1            2       3        4          5
   // Order: front, right front, right back, back, left back, left front
   dst[0] = src[1];
-  dst[1] = src[4];
-  dst[2] = src[5];
+  dst[1] = src[5];
+  dst[2] = src[4];
   dst[3] = src[3];
   dst[4] = src[0];
   dst[5] = src[2];
@@ -198,6 +199,70 @@ void Grayscale_StopScan(void) {
 
   grayscaleLineInfo.isCalibrated = hasValidRange;
   Grayscale_Process();
+}
+
+bool Grayscale_ApplyCalibration(const uint16_t *minValues,
+                                const uint16_t *maxValues,
+                                const uint16_t *thresholds) {
+  if ((minValues == NULL) || (maxValues == NULL)) {
+    return false;
+  }
+
+  bool hasValidRange = false;
+
+  for (int i = 0; i < GRAYSCALE_NUM; i++) {
+    const uint16_t minValue = minValues[i];
+    const uint16_t maxValue = maxValues[i];
+    const uint16_t range = (uint16_t)(maxValue - minValue);
+
+    grayscaleLineInfo.minValues[i] = minValue;
+    grayscaleLineInfo.maxValues[i] = maxValue;
+
+    if (range > (uint16_t)GRAYSCALE_MIN_VALID_RANGE) {
+      hasValidRange = true;
+      if (thresholds != NULL) {
+        grayscaleLineInfo.thresholds[i] = thresholds[i];
+      } else {
+        grayscaleLineInfo.thresholds[i] =
+            minValue + (range * GRAYSCALE_THRESHOLD_RATIO_PERCENT) / 100;
+      }
+    } else {
+      grayscaleLineInfo.thresholds[i] = 0U;
+    }
+  }
+
+  grayscaleLineInfo.isScanning = false;
+  grayscaleLineInfo.isCalibrated = hasValidRange;
+  Grayscale_Process();
+
+  return hasValidRange;
+}
+
+void Grayscale_PrintCalibrationData(void) {
+  if (!grayscaleLineInfo.isCalibrated) {
+    printf("[Grayscale] No valid calibration to print.\r\n");
+    return;
+  }
+
+  printf("[Grayscale] Copy these values for manual restore after reset:\r\n");
+
+  printf("static const uint16_t GS_MIN[GRAYSCALE_NUM] = {");
+  for (int i = 0; i < GRAYSCALE_NUM; i++) {
+    printf("%u%s", grayscaleLineInfo.minValues[i], (i == GRAYSCALE_NUM - 1) ? "" : ", ");
+  }
+  printf("};\r\n");
+
+  printf("static const uint16_t GS_MAX[GRAYSCALE_NUM] = {");
+  for (int i = 0; i < GRAYSCALE_NUM; i++) {
+    printf("%u%s", grayscaleLineInfo.maxValues[i], (i == GRAYSCALE_NUM - 1) ? "" : ", ");
+  }
+  printf("};\r\n");
+
+  printf("static const uint16_t GS_THD[GRAYSCALE_NUM] = {");
+  for (int i = 0; i < GRAYSCALE_NUM; i++) {
+    printf("%u%s", grayscaleLineInfo.thresholds[i], (i == GRAYSCALE_NUM - 1) ? "" : ", ");
+  }
+  printf("};\r\n");
 }
 
 bool Grayscale_IsScanning(void) {

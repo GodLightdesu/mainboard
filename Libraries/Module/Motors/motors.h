@@ -75,6 +75,7 @@ uint8_t mtr_GetSpeed(MtrID_t mtr_id);
 
 /* Motor advanced control functions */
 void mtrs_Set4Speed(int spd0, int spd1, int spd2, int spd3);
+void rotate(int spd, bool dir); // dir: true for clockwise, false for counterclockwise
 void polarMove(float angle_deg, uint8_t speed_percent);
 void polarMoveWthCorr(float angle_deg, uint8_t speed_percent, int yaw_corr);
 void mtrs_StopAll(void);

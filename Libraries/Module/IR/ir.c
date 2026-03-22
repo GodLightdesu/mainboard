@@ -123,7 +123,7 @@ void IR_Init(I2C_HandleTypeDef *hi2c) {
   IR.slaves[IR_SLAVE_2].processBuffer = processBuffer2;
   IR.slaves[IR_SLAVE_2].bufferSize = IR_BUFFER_SIZE;
   IR.slaves[IR_SLAVE_2].txSize = 0;  // 0 = 直接讀取，不寫入暫存器
-  IR.slaves[IR_SLAVE_2].enabled = true;  // 已停用 - 目前僅使用從設備 1
+  IR.slaves[IR_SLAVE_2].enabled = true;  // 已啟用
   
   /* 清空緩衝區 */
   if (rxBuffer1) memset(rxBuffer1, 0, IR_BUFFER_SIZE);
