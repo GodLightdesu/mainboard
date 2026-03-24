@@ -272,3 +272,48 @@ void compassCar(float target_yaw, float yaw) {
 // if (pidOutput >= 0) pidOutput = (pidOutput < BASE_SPEED) ? BASE_SPEED : pidOutput;
 // else pidOutput = (pidOutput > -BASE_SPEED) ? -BASE_SPEED : pidOutput;
 // mtrs_Set4Speed(pidOutput, pidOutput, pidOutput, pidOutput);
+
+/*
+L     F     R
+  F       F 
+B           B
+
+      B
+*/
+// Boundary correction movement based on grayscale sensors
+void boundMove(const ModuleData_t *data, PID_Controller_t *yawPid, int moveSpeed) {
+  float yaw = data->mpuData->euler.yaw;
+  const GrayscaleLineInfo_t *gsInfo = Grayscale_GetLineInfo();
+  float vec_x = 0.0f;
+  float vec_y = 0.0f;
+
+  for (int i = 0; i < GRAYSCALE_NUM; i++) {
+    if (gsInfo->strengths[i] > GS_STR_MIN_THRESHOLD) {
+      float vector_angle = (i * (360.0f / GRAYSCALE_NUM)) + 180.0f;
+      float rad = vector_angle * DEG_TO_RAD;
+      vec_x += (float)gsInfo->strengths[i] * arm_cos_f32(rad);
+      vec_y += (float)gsInfo->strengths[i] * arm_sin_f32(rad);
+    }
+  }
+
+  if (vec_x == 0.0f && vec_y == 0.0f) {
+    mtrs_StopAll();
+  } else {
+    float moveAngle;
+    arm_atan2_f32(vec_y, vec_x, &moveAngle);
+    moveAngle *= RAD_TO_DEG;
+    if (moveAngle < 0.0f) moveAngle += 360.0f;
+
+    int yawCorr = (int)PID_Compute(yawPid, 0.0f, yaw);
+    polarMoveWthCorr(moveAngle, moveSpeed, yawCorr);
+
+    #ifdef DEBUG_SOCCER
+    static uint32_t lastDebug = 0;
+    const uint32_t currentTime = HAL_GetTick();
+    if (TIME_DIFF(currentTime, lastDebug) >= DEBUG_PRINT_INTERVAL_MS) {
+      printf("Bound: move=%.1f vec=(%.1f, %.1f) yawCorr=%d\r\n", moveAngle, vec_x, vec_y, yawCorr);
+      lastDebug = currentTime;
+    }
+    #endif
+  }
+}

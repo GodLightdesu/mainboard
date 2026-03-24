@@ -139,14 +139,14 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     DEBUG_BUTTON # 启用按键调试信息输出
 
     # DEBUG_SOCCER # 启用足球机器人状态机调试信息输出
-    # DEBUD_ATTACK # 启用进攻模式调试信息输出
+    # DEBUG_ATTACK # 启用进攻模式调试信息输出
     # DEBUG_DEFENSE # 启用防守模式调试信息输出
 
     # DEBUG_CAM # 启用摄像头调试信息
 
     # DEBUG_IR # 启用红外传感器调试信息
-    # DEBUG_XS # 启用Xsound传感器调试信息
-    DEBUG_GRAYSCALE # 启用灰度传感器调试信息
+    DEBUG_XS # 启用Xsound传感器调试信息
+    # DEBUG_GRAYSCALE # 启用灰度传感器调试信息
 
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试
     # DEBUG_MPU6050_DMP # MPU6050姿态（滚转/俯仰/偏航）调试

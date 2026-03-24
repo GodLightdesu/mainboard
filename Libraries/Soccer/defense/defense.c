@@ -3,8 +3,8 @@
 static PID_Controller_t yawCorrectPID;  // 追球时偏航修正PID
 static DefenseState_t defenseState = DEFENSE_STATE_IDLE;
 
-static void boundMove(const ModuleData_t *data, int yawCorr);
 static void blockMove(const ModuleData_t *data, int yawCorr);
+static void returnMove(const ModuleData_t *data, int yawCorr);
 
 void DefenseInit(void) {
   // 初始化PID控制器
@@ -13,143 +13,78 @@ void DefenseInit(void) {
   defenseState = DEFENSE_STATE_IDLE;
 }
 
-static DefenseState_t updateDefenseState(const ModuleData_t *data) {
-  DefenseState_t currentState = defenseState;
-  DefenseState_t nextState = currentState;
-  
+void DefenseMode(const ModuleData_t *data) {
   // Extract sensor data
   float yaw = data->mpuData->euler.yaw;
   bool ballDetected = (data->irData->ballAngle >= 0);
   bool yawAligned = (-YAW_THRESHOLD <= yaw && yaw <= YAW_THRESHOLD);
   bool outOfBounds = Grayscale_IsOnWhiteLine();
 
-  switch (currentState) {
-  case DEFENSE_STATE_IDLE:
-    if (outOfBounds) {
-      nextState = DEFENSE_STATE_OUT_OF_BOUNDS;
-    } else if (ballDetected) {
-      nextState = DEFENSE_STATE_BLOCK_SHOT;
-    } else if (!yawAligned) {
-      nextState = DEFENSE_STATE_ALIGN_YAW;
-    }
-    break;
-
-  case DEFENSE_STATE_RETURN_GOAL:
-    break;
-
-  case DEFENSE_STATE_BLOCK_SHOT:
-    if (outOfBounds) {
-      nextState = DEFENSE_STATE_OUT_OF_BOUNDS;
-    } else if (!ballDetected) {
-      if (!yawAligned) {
-        nextState = DEFENSE_STATE_ALIGN_YAW;
-      } else {
-        nextState = DEFENSE_STATE_IDLE;
-      }
-    }
-    break;
-
-  case DEFENSE_STATE_OUT_OF_BOUNDS:
-    if (!outOfBounds) {
-      if (ballDetected) {
-        nextState = DEFENSE_STATE_BLOCK_SHOT;
-      } else if (!yawAligned) {
-        nextState = DEFENSE_STATE_ALIGN_YAW;
-      } else {
-        nextState = DEFENSE_STATE_IDLE;
-      }
-    }
-    break;
-
-  case DEFENSE_STATE_ALIGN_YAW:
-    if (outOfBounds) {
-      nextState = DEFENSE_STATE_OUT_OF_BOUNDS;
-    } else if (ballDetected) {
-      nextState = DEFENSE_STATE_BLOCK_SHOT;
-    } else if (yawAligned) {
-      nextState = DEFENSE_STATE_IDLE;
-    }
-    break;
-  }
-
-  defenseState = nextState;
-  return defenseState;
-}
-
-void DefenseMode(const ModuleData_t *data) {
-  // Update state based on sensor data
-  DefenseState_t currentState = updateDefenseState(data);
-
-  float yaw = data->mpuData->euler.yaw;
   int yawCorr = (int)PID_Compute(&yawCorrectPID, 0.0f, yaw);
 
-  switch (currentState) {
-  case DEFENSE_STATE_IDLE: {
-    mtrs_StopAll();
-    break;
-  }
-  case DEFENSE_STATE_BLOCK_SHOT: {
+  // State transitions based on sensor inputs
+  if (outOfBounds) {
+    boundMove(data, &yawCorrectPID, DEF_BOUND_MOVE_SPEED);
+    return;
+  } else if (ballDetected && data->irData->maxValue > DEF_BALL_THRESHOLD) {
     blockMove(data, yawCorr);
-    break;
-  }
-  case DEFENSE_STATE_RETURN_GOAL: {
-    break;
-  }
-  case DEFENSE_STATE_OUT_OF_BOUNDS: {
-    boundMove(data, yawCorr);
-    break;
-  }
-  case DEFENSE_STATE_ALIGN_YAW: {
+    return;
+  } else if (!yawAligned) {
     compassCar(0, yaw);
-    break;
-  }
-  default: {
-    mtrs_StopAll();
-    break;
-  }
+    return;
+  } else {
+    returnMove(data, yawCorr);
+    return;
   }
 }
 
 DefenseState_t getDefenseState(void) { return defenseState; }
 
-void boundMove(const ModuleData_t *data, int yawCorr) {
-  if (Grayscale_IsSensorOnWhiteLine(0)) {
-    polarMoveWthCorr(0.0f, 60, yawCorr);
+void blockMove(const ModuleData_t *data, int yawCorr) {
+  float target_yaw = 0.0f;
+  float yaw = data->mpuData->euler.yaw;
+  float ballAngle = data->irData->ballAngle;
+  // ball in right
+  if (ballAngle >= DEF_ANGLE_CORR_MIN_THRESHOLD && ballAngle <= 180) {
+    polarMoveWthCorr(90.0f, DEF_BLOCK_SPEED, yawCorr);
   }
-  // back touch white
-  else if (Grayscale_IsSensorOnWhiteLine(3)) {
-    polarMoveWthCorr(180.0f, 60, yawCorr);
-  }
-  // back and right back
-  else if (Grayscale_IsSensorOnWhiteLine(3) && Grayscale_IsSensorOnWhiteLine(2)) {
-    polarMoveWthCorr(135.0f, 50, yawCorr);
-  }
-  // back and left back
-  else if (Grayscale_IsSensorOnWhiteLine(3) && Grayscale_IsSensorOnWhiteLine(4)) {
-    polarMoveWthCorr(225.0f, 50, yawCorr);
-  }
-  // front and right front
-  else if (Grayscale_IsSensorOnWhiteLine(0) && Grayscale_IsSensorOnWhiteLine(1)) {
-    polarMoveWthCorr(0.0f, 50, yawCorr);
-  }
-  // front and left front
-  else if (Grayscale_IsSensorOnWhiteLine(0) && Grayscale_IsSensorOnWhiteLine(5)) {
-    polarMoveWthCorr(0.0f, 50, yawCorr);
+   // ball in left
+  else if (ballAngle <= DEF_ANGLE_CORR_MAX_THRESHOLD && ballAngle > 180) {
+    polarMoveWthCorr(270.0f, DEF_BLOCK_SPEED, yawCorr);
   }
 }
-
-void blockMove(const ModuleData_t *data, int yawCorr) {
-  float ballAngle = data->irData->ballAngle;
-  float moveAngle = 0.0f;
-  int spd = 60;
-
-  if (ballAngle >= 0 && ballAngle < 180) {
-    // Ball on right, move right
-    moveAngle = 90.0f;
-  } else if (ballAngle >= 180 && ballAngle < 360) {
-    // Ball on left, move left
-    moveAngle = 270.0f;
+void returnMove(const ModuleData_t *data, int yawCorr) {
+  bool nearRight = (data->xsoundData->distances[1] < DEF_R_XS_THRESHOLD_CLOSE);
+  bool nearLeft = (data->xsoundData->distances[2] < DEF_L_XS_THRESHOLD_CLOSE);
+  bool tooFarBack = (data->xsoundData->distances[0] > DEF_XSOUND_THRESHOLD_TOO_FAR);
+  bool farBack = (data->xsoundData->distances[0] > DEF_XSOUND_THRESHOLD_FAR && 
+                data->xsoundData->distances[0] <= DEF_XSOUND_THRESHOLD_TOO_FAR);
+  bool tooClose = (data->xsoundData->distances[0] < DEF_XSOUND_THRESHOLD_CLOSE);
+  
+  if (tooFarBack) {
+    if (nearRight) {
+      polarMoveWthCorr(225.0f, DEF_RETURN_SPD, yawCorr);
+    }
+    else if (nearLeft) {
+      polarMoveWthCorr(135.0f, DEF_RETURN_SPD, yawCorr);
+    }
+    else {
+      polarMoveWthCorr(180.0f, DEF_RETURN_SPD, yawCorr);
+    }
+  } else if (farBack) {
+    if (nearRight) {
+      polarMoveWthCorr(270.0f, DEF_RETURN_SPD, yawCorr);
+    }
+    else if (nearLeft) {
+      polarMoveWthCorr(90.0f, DEF_RETURN_SPD, yawCorr);
+    }
+    else {
+      polarMoveWthCorr(180.0f, DEF_RETURN_SPD, yawCorr);
+    }
+  } else if (tooClose) {
+    polarMoveWthCorr(0.0f, DEF_RETURN_SPD, yawCorr);
   }
-
-  polarMoveWthCorr(moveAngle, spd, yawCorr);
+  else {
+    mtrs_StopAll();
+  }
 }
