@@ -24,8 +24,8 @@ clock = time.clock()
 uart = UART(3, 9600)
 
 # ball = (18, 50, 12, 54, 10, 56)
-blue_goal = (13, 29, -128, 2, -128, -6)
-yellow_goal = (56, 89, -128, 127, 44, 127)
+# blue_goal = (0, 22, -128, 127, -128, -5)
+blue_goal = (43, 100, -128, 127, 45, 127) # in yellow goal
 
 data = {}
 
@@ -52,8 +52,8 @@ while True:
   if blobs:
     # use the largest blobs
     largest_blob = max(blobs, key=lambda b: b.pixels())
-    # img.draw_rectangle(largest_blob.rect())
-    # img.draw_cross(largest_blob.cx(), largest_blob.cy())
+    img.draw_rectangle(largest_blob.rect())
+    img.draw_cross(largest_blob.cx(), largest_blob.cy())
 
     # store blob data in a dictionary
     data['x'] = largest_blob.cx()
@@ -63,17 +63,18 @@ while True:
     # data['w'] = largest_blob.w()
     # data['h'] = largest_blob.h()
     # data['pixels'] = largest_blob.pixels()
-    # data['area'] = largest_blob.area()
+    # data['`area'] = largest_blob.area()
 
     # find the angle from the origin to the blob center
     dx = data['x'] - middle_x
     dy = bottom_y - data['y']
     angle = math.atan2(dx, dy) * 180 / math.pi
+    # data['angle'] = angle * -1
     data['angle'] = angle
 
     # draw line from origin to blob center
-    # img.draw_cross(middle_x, bottom_y)
-    # img.draw_line(middle_x, bottom_y, data['x'], data['y'])
+    img.draw_cross(middle_x, bottom_y)
+    img.draw_line(middle_x, bottom_y, data['x'], data['y'])
 
     G_led.on()
 

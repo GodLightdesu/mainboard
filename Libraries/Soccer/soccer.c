@@ -6,9 +6,9 @@
 
 #define ENABLE_MANUAL_GRAYSCALE_CALIBRATION 1
 #if ENABLE_MANUAL_GRAYSCALE_CALIBRATION
-static const uint16_t GS_MIN[GRAYSCALE_NUM] = {18247, 22976, 13701, 22036, 19558, 12710};
-static const uint16_t GS_MAX[GRAYSCALE_NUM] = {38636, 43145, 33270, 42739, 42080, 26584};
-static const uint16_t GS_THD[GRAYSCALE_NUM] = {22324, 27009, 17614, 26176, 24062, 15484};
+static const uint16_t GS_MIN[GRAYSCALE_NUM] = {18272, 23863, 12821, 20837, 18622, 12170};
+static const uint16_t GS_MAX[GRAYSCALE_NUM] = {23344, 28526, 18061, 26211, 23767, 15464};
+static const uint16_t GS_THD[GRAYSCALE_NUM] = {19286, 24795, 13869, 21911, 19651, 12828};
 #endif
 
 // 系统状态变量
@@ -27,7 +27,7 @@ static PID_Controller_t yawAlignPID;
 static void SoccerButtonControl(uint8_t btn_index, BtnEvent_t event) {
   switch (btn_index) {
   case 0: // 按钮1 - 启动
-    if (event == BTN_EVENT_LONG_PRESS_START) {
+    if (event == BTN_EVENT_CLICK) {
       // 长按启动系统
       if (!systemStarted) {
         systemStarted = true;

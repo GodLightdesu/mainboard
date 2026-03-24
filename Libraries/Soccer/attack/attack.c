@@ -1,4 +1,5 @@
 #include "attack.h"
+#include "motors.h"
 
 // PID控制器实例
 static PID_Controller_t yawCorrectPID;  // 追球时偏航修正PID
@@ -18,122 +19,24 @@ AttackState_t getAttackState(void) {
   return attackState;
 }
 
-static AttackState_t updateAttackState(const ModuleData_t *data) {
-  AttackState_t currentState = attackState;
-  AttackState_t nextState = currentState;
-  
-  // Extract sensor data
+void AttackMode(const ModuleData_t *data) {
   float yaw = data->mpuData->euler.yaw;
   bool ballDetected = (data->irData->ballAngle >= 0);
   bool yawAligned = (-YAW_THRESHOLD <= yaw && yaw <= YAW_THRESHOLD);
   bool outOfBounds = Grayscale_IsOnWhiteLine();
-  
-  // Check for out of bounds condition first - highest priority
-  if (outOfBounds && currentState != ATTACK_STATE_OUT_OF_BOUNDS) {
-    nextState = ATTACK_STATE_OUT_OF_BOUNDS;
-    attackState = nextState;
-    return nextState;
-  }
-  
-  // State machine transitions based on current state
-  switch (currentState) {
-  case ATTACK_STATE_IDLE:
-    // Transition to SEARCH if mode is active (handled by caller setting state or initial state)
-    // If we rely on SoccerMode to switch us, we should start in SEARCH if active.
-    // However, if we just init, we might be IDLE.
-    // Let's assume if we are called, we should be doing something.
-    if (Soccer_IsSystemStarted()) {
-      nextState = ATTACK_STATE_SEARCH_BALL;
-    }
-    break;
 
-  // return to center to search for ball
-  case ATTACK_STATE_SEARCH_BALL:
-    if (!yawAligned) {
-      nextState = ATTACK_STATE_ALIGN_YAW;
-    } else if (ballDetected) {
-      nextState = ATTACK_STATE_CHASE_BALL;
-    }
-    // keep searching if not aligned and no ball detected
-    break;
-
-  case ATTACK_STATE_CHASE_BALL:
-    if (!ballDetected) {
-      nextState = ATTACK_STATE_SEARCH_BALL;
-    } else if (!yawAligned) {
-      nextState = ATTACK_STATE_ALIGN_YAW;
-    }
-    // keep chasing if ball is detected and yaw is aligned
-    break;
-
-  case ATTACK_STATE_ALIGN_YAW:
-    if (yawAligned) {
-      if (ballDetected) {
-        nextState = ATTACK_STATE_CHASE_BALL;
-      } else {
-        nextState = ATTACK_STATE_SEARCH_BALL;
-      }
-    }
-    // keep correcting if not aligned
-    break;
-
-  case ATTACK_STATE_OUT_OF_BOUNDS:
-    if (!outOfBounds) {
-      // If we just got back in bounds, decide where to go based on ball detection and yaw
-      if (ballDetected) {
-        nextState = ATTACK_STATE_CHASE_BALL;
-      } else if (!yawAligned) {
-        nextState = ATTACK_STATE_ALIGN_YAW;
-      } else {
-        nextState = ATTACK_STATE_SEARCH_BALL;
-      }
-    }
-    // keep doing boundary correction if still out of bounds
-    break;
-  
-  default:
-    // Invalid state - reset to IDLE for safety
-    nextState = ATTACK_STATE_IDLE;
-    break;
-  }
-  
-  attackState = nextState;
-  return nextState;
-}
-
-void AttackMode(const ModuleData_t *data) {
-  // Update state based on sensor data
-  AttackState_t currentState = updateAttackState(data);
-
-  // State machine execution
-  switch (currentState) {
-  case ATTACK_STATE_IDLE:
-    mtrs_StopAll();
-    break;
-
-  case ATTACK_STATE_SEARCH_BALL: {
-    mtrs_StopAll();
-    break;
-  }
-
-  case ATTACK_STATE_CHASE_BALL: {
-    chaseMove(data);
-    break;
-  }
-
-  case ATTACK_STATE_ALIGN_YAW: {
-    compassCar(0, data->mpuData->euler.yaw);
-    break;
-  }
-  
-  case ATTACK_STATE_OUT_OF_BOUNDS: {
+  if (outOfBounds) {
     boundMove(data);
-    break;
-  }
-    
-  default:
+    return;
+  } else if (ballDetected) {
+    chaseMove(data);
+    return;
+  } else if (!yawAligned) {
+    compassCar(0, yaw);
+    return;
+  } else {
     mtrs_StopAll();
-    break;
+    return;
   }
 }
 
@@ -160,25 +63,28 @@ static void chaseMove(const ModuleData_t *data) {
     angleDrift *= RAD_TO_DEG;
     
     moveAngle = (ballAngle <= ANGLE_HALF_CIRCLE) ? (ballAngle + angleDrift) : (ballAngle - angleDrift);
+    int yawCorr = (int)PID_Compute(&yawCorrectPID, target_yaw, yaw);
+    polarMoveWthCorr(moveAngle, spd, yawCorr);
+    PID_SetGains(&yawCorrectPID, ATK_CORR_kp, ATK_CORR_ki, ATK_CORR_kd); // Reset to default gains for next cycle
   }
   // Ball is roughly in front
   else if (ANGLE_CORR_MAX_THRESHOLD < ballAngle || ballAngle <= ANGLE_CORR_MIN_THRESHOLD) {
-    // TODO: maybe need pid to slow down when very close to prevent out of bound
+    // TODO: maybe need pid to slow down when very close to prevent out of bounds
     spd += BALL_CLOSE_SPEED_BONUS;
     
     // If ball is close (large max value), use cam angle for finer control
     if (data->irData->maxValue > BALL_CLOSE_VALUE_THRESHOLD) {
-      moveAngle = camAngle; // Directly use camera angle for movement direction
+      // moveAngle = camAngle; // Directly use camera angle for movement direction
       target_yaw = camAngle;  // Use camera angle for correction when ball is close
 
       // Increase gains for more aggressive correction when close
-      // max angle (40) -> 0.5 * 40 = 20 yaw correction
-      // mid angle (20) -> 0.5 * 20 = 10 yaw correction
+      // max angle (40) -> 0.7 * 40 = 28 yaw correction
+      // mid angle (20) -> 0.7 * 20 = 14 yaw correction
       // which are more than enough to quickly align to the ball
-      PID_SetGains(&yawCorrectPID, 0.5f, ATK_CORR_ki, ATK_CORR_kd);
-    } else {
-      target_yaw = 0.0f; // When ball is in front but not close, just try to go straight and let PID handle minor corrections
+      PID_SetGains(&yawCorrectPID, 1.0f, ATK_CORR_ki, ATK_CORR_kd);
     }
+    // for test
+    // mtrs_StopAll();
   }
 
   int yawCorr = (int)PID_Compute(&yawCorrectPID, target_yaw, yaw);

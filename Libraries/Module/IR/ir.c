@@ -90,8 +90,8 @@ static void IR_DataProcessCallback(I2C_Module_t *module, uint8_t slaveId) {
     }
     
     /* 自動計算球的角度（使用拋物線插值法以獲得最高精度）*/
-    IR.ballAngle = IR_CalBallAngleInterpolated();
-    // IR.ballAngle = IR_CalBallAngle();
+    // IR.ballAngle = IR_CalBallAngleInterpolated();
+    IR.ballAngle = IR_CalBallAngle();
     
     IR.dataReady = true;
     

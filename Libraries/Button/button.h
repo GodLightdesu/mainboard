@@ -2,8 +2,8 @@
 #define BUTTON_H
 
 #define MAX_BUTTONS 8
-#define BTN_DEBOUNCE_TIME_MS 20       // 消抖时间
-#define BTN_LONG_PRESS_TIME_MS  1000  // 长按时间阈值（用于启动）
+#define BTN_DEBOUNCE_TIME_MS 10       // 消抖时间
+#define BTN_LONG_PRESS_TIME_MS  500  // 长按时间阈值（用于启动）
 #define BTN_DOUBLE_CLICK_TIME_MS 300  // 双击间隔时间阈值
 #define BTN_SCAN_INTERVAL_MS    10    // 扫描间隔
 
