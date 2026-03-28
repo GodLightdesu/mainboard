@@ -4,11 +4,13 @@
 
 #define LED_GRAYSCALE_SCAN LED_3
 
+#define MODE_SWITCH_TIMEOUT_MS 5000 /**< Time threshold for switching back to defensive mode if ball is lost (milliseconds) */
+
 #define ENABLE_MANUAL_GRAYSCALE_CALIBRATION 1
 #if ENABLE_MANUAL_GRAYSCALE_CALIBRATION
-static const uint16_t GS_MIN[GRAYSCALE_NUM] = {18272, 23863, 12821, 20837, 18622, 12170};
-static const uint16_t GS_MAX[GRAYSCALE_NUM] = {23344, 28526, 18061, 26211, 23767, 15464};
-static const uint16_t GS_THD[GRAYSCALE_NUM] = {19286, 24795, 13869, 21911, 19651, 12828};
+static const uint16_t GS_MIN[GRAYSCALE_NUM] = {17278, 22417, 12909, 21134, 17383, 11456};
+static const uint16_t GS_MAX[GRAYSCALE_NUM] = {22068, 26879, 17802, 25297, 23238, 15228};
+static const uint16_t GS_THD[GRAYSCALE_NUM] = {18236, 23309, 13887, 21966, 18554, 12210};
 #endif
 
 // 系统状态变量
@@ -18,6 +20,7 @@ static volatile bool emergencyStop = false;
 static volatile bool gsToggleRequested = false;
 static Mode_t mode = MODE_DEFENSIVE;
 static uint32_t systemStartTime = 0;
+static uint32_t lastBallDetectionTime = 0;
 static uint32_t grayscaleLedLastBlink = 0;
 
 // 车辆旋转对齐PID
@@ -162,7 +165,7 @@ void SoccerProcess(const ModuleData_t *data) {
     return;
   }
   
-  Soccer_UpdateMode(data);
+  // Soccer_UpdateMode(data);
 
   // 根据当前模式执行对应的处理函数
   switch (mode) {
@@ -205,7 +208,27 @@ void SoccerProcess(const ModuleData_t *data) {
 // offensive -> defensive: go back to defensive position (white line in front of the goal)l;.,
 // can use a timer to track how long since last ball detection, and if exceeds threshold, toggle mode
 void Soccer_UpdateMode(const ModuleData_t *data) {
-  
+  if (data->irData->ballAngle >= 0.0f) {
+    lastBallDetectionTime = HAL_GetTick();
+  } else {
+    uint32_t timeSinceLastBall = HAL_GetTick() - lastBallDetectionTime;
+    if (timeSinceLastBall > MODE_SWITCH_TIMEOUT_MS) {
+      // 超过阈值且当前模式为防守，切换到进攻
+      if (mode == MODE_DEFENSIVE) {
+        mode = MODE_OFFENSIVE;
+        #ifdef DEBUG_SOCCER
+        printf("Mode switched to OFFENSIVE due to no ball detected for %lu ms\r\n", timeSinceLastBall);
+        #endif
+      }
+      // 超过阈值且当前模式为进攻，切换到防守
+      else if (mode == MODE_OFFENSIVE) {
+        mode = MODE_DEFENSIVE;
+        #ifdef DEBUG_SOCCER
+        printf("Mode switched to DEFENSIVE due to no ball detected for %lu ms\r\n", timeSinceLastBall);
+        #endif
+      }
+    }
+  }
 }
 
 // 添加等待启动的函数

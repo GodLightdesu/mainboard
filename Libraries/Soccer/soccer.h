@@ -26,7 +26,7 @@
 #define YAW_PID_kp 0.4f     // 提高響應速度
 #define YAW_PID_ki 0.0f     // 降低積分避免超調
 #define YAW_PID_kd 2.0f     // 增加阻尼穩定性
-#define YAW_THRESHOLD 10.0f             /**< Yaw angle threshold for stopping correction (degrees) */
+#define YAW_THRESHOLD 7.0f             /**< Yaw angle threshold for stopping correction (degrees) */
 #define INTEGRAL_LIMIT 500.0f           /**< Maximum integral accumulation for anti-windup */
 
 #define BALL_BIG_RADIUS 1200.0f         /**< R = Max eye value * tan(theta) */

@@ -135,7 +135,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
     # ==================== 用户调试宏 ====================
-    DEBUG_GENERAL # 启用通用调试信息输出
+    # DEBUG_GENERAL # 启用通用调试信息输出
     DEBUG_BUTTON # 启用按键调试信息输出
 
     # DEBUG_SOCCER # 启用足球机器人状态机调试信息输出

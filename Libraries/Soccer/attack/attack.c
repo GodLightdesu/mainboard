@@ -6,6 +6,7 @@ static PID_Controller_t yawCorrectPID;  // 追球时偏航修正PID
 static AttackState_t attackState = ATTACK_STATE_IDLE;
 
 static void chaseMove(const ModuleData_t *data);
+static void ATK_returnMove(const ModuleData_t *data);
 
 void AttackInit(void) {
   // 初始化PID控制器
@@ -34,7 +35,7 @@ void AttackMode(const ModuleData_t *data) {
     compassCar(0, yaw);
     return;
   } else {
-    mtrs_StopAll();
+    ATK_returnMove(data);
     return;
   }
 }
@@ -100,3 +101,28 @@ static void chaseMove(const ModuleData_t *data) {
   #endif
 }
 
+void ATK_returnMove(const ModuleData_t *data) {
+  float yaw = data->mpuData->euler.yaw;
+  int yawCorr = (int)PID_Compute(&yawCorrectPID, 0.0f, yaw);
+  bool nearRight = (data->xsoundData->distances[1] < 70);
+  bool nearLeft = (data->xsoundData->distances[2] < 70);
+  bool tooFarBack = (data->xsoundData->distances[0] > 90);
+  bool tooClose = (data->xsoundData->distances[0] < 30);
+  
+  if (tooFarBack) {
+    if (nearRight) {
+      polarMoveWthCorr(225.0f, 65, yawCorr);
+    }
+    else if (nearLeft) {
+      polarMoveWthCorr(135.0f, 65, yawCorr);
+    }
+    else {
+      polarMoveWthCorr(180.0f, 65, yawCorr);
+    }
+  } else if (tooClose) {
+    polarMoveWthCorr(0.0f, 65, yawCorr);
+  }
+  else {
+    mtrs_StopAll();
+  }
+}

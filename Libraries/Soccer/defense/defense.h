@@ -9,21 +9,21 @@
 // Defense movement speeds
 #define DEF_BOUND_SPEED_STRAIGHT 50
 #define DEF_BOUND_SPEED_DIAGONAL 50
-#define DEF_BLOCK_SPEED 65
-#define DEF_RETURN_SPD 65
+#define DEF_BLOCK_SPEED 75
+#define DEF_RETURN_SPD 70
 #define DEF_BOUND_MOVE_SPEED 65       /**< Speed for boundary correction movement */
 
 // Xsound thresholds for boundary avoidance
-#define DEF_L_XS_THRESHOLD_CLOSE 70   // larger to more middle
-#define DEF_R_XS_THRESHOLD_CLOSE 70   // larger to more middle
+#define DEF_L_XS_THRESHOLD_CLOSE 60   // larger to more middle
+#define DEF_R_XS_THRESHOLD_CLOSE 80   // larger to more middle
 #define DEF_XSOUND_THRESHOLD_TOO_FAR 100
-#define DEF_XSOUND_THRESHOLD_FAR 55
+#define DEF_XSOUND_THRESHOLD_FAR 50
 #define DEF_XSOUND_THRESHOLD_CLOSE 40
 
 #define DEF_BALL_THRESHOLD 300
 
-#define DEF_ANGLE_CORR_MIN_THRESHOLD 25.0f   /**< Minimum angle for correction (degrees) */
-#define DEF_ANGLE_CORR_MAX_THRESHOLD 335.0f  /**< Maximum angle for correction (degrees) */
+#define DEF_ANGLE_CORR_MIN_THRESHOLD 10.0f   /**< Minimum angle for correction (degrees) */
+#define DEF_ANGLE_CORR_MAX_THRESHOLD 350.0f  /**< Maximum angle for correction (degrees) */
 
 #include "soccer.h"
 

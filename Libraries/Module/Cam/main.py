@@ -24,8 +24,8 @@ clock = time.clock()
 uart = UART(3, 9600)
 
 # ball = (18, 50, 12, 54, 10, 56)
-# blue_goal = (0, 22, -128, 127, -128, -5)
-blue_goal = (43, 100, -128, 127, 45, 127) # in yellow goal
+# blue_goal = (28, 72, -128, 127, -128, -35)
+blue_goal = (62, 89, -128, 127, 45, 127) # in yellow goal
 
 data = {}
 

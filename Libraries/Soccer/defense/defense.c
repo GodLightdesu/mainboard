@@ -44,13 +44,12 @@ void blockMove(const ModuleData_t *data, int yawCorr) {
   float target_yaw = 0.0f;
   float yaw = data->mpuData->euler.yaw;
   float ballAngle = data->irData->ballAngle;
+  float moveAngle = ballAngle;
   // ball in right
-  if (ballAngle >= DEF_ANGLE_CORR_MIN_THRESHOLD && ballAngle <= 180) {
-    polarMoveWthCorr(90.0f, DEF_BLOCK_SPEED, yawCorr);
-  }
-   // ball in left
-  else if (ballAngle <= DEF_ANGLE_CORR_MAX_THRESHOLD && ballAngle > 180) {
-    polarMoveWthCorr(270.0f, DEF_BLOCK_SPEED, yawCorr);
+  if (ballAngle >= DEF_ANGLE_CORR_MIN_THRESHOLD && ballAngle <= DEF_ANGLE_CORR_MAX_THRESHOLD) {
+    if (ballAngle < 90.0f) {moveAngle = 90;}
+    else if (ballAngle > 270.0f) {moveAngle = 270.0f;}
+    polarMoveWthCorr(moveAngle, DEF_BLOCK_SPEED, yawCorr);
   }
 }
 void returnMove(const ModuleData_t *data, int yawCorr) {

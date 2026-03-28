@@ -268,8 +268,8 @@ int main(void)
   Mtrs_Init();
 
   /* Initialize soccer control logic */
-  SoccerInit(MODE_DEFENSIVE);    // Defense Mode
-  // SoccerInit(MODE_OFFENSIVE); // Attack Mode
+  // SoccerInit(MODE_DEFENSIVE);    // Defense Mode
+  SoccerInit(MODE_OFFENSIVE); // Attack Mode
 
   /* Check for IWDG reset - auto-start system if reset occurred */
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDG1RST)) {
