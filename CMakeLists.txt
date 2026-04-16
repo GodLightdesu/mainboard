@@ -145,7 +145,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # DEBUG_CAM # 启用摄像头调试信息
 
     # DEBUG_IR # 启用红外传感器调试信息
-    DEBUG_XS # 启用Xsound传感器调试信息
+    # DEBUG_XS # 启用Xsound传感器调试信息
     # DEBUG_GRAYSCALE # 启用灰度传感器调试信息
 
     # DEBUG_MPU6050        # MPU6050传感器数据和初始化调试

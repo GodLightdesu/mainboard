@@ -281,8 +281,8 @@ bool Soccer_IsEmergencyStop(void) { return emergencyStop; }
 
 void compassCar(float target_yaw, float yaw) {
   int pidOutput = (int)PID_Compute(&yawAlignPID, target_yaw, yaw);
-  if (pidOutput >= 0) pidOutput = (pidOutput < BASE_SPEED) ? BASE_SPEED : pidOutput;
-  else pidOutput = (pidOutput > -BASE_SPEED) ? -BASE_SPEED : pidOutput;
+  if (pidOutput >= 0) pidOutput = (pidOutput < 35) ? 35 : pidOutput;
+  else pidOutput = (pidOutput > -35) ? -35 : pidOutput;
   mtrs_Set4Speed(pidOutput, pidOutput, pidOutput, pidOutput);
 }
 /* Compass Car test */

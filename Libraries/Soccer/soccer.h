@@ -20,7 +20,7 @@
 
 /* Soccer control constants */
 #define REAL_MAX_SPEED 70               /**< Maximum motor speed */
-#define BASE_SPEED 35                   /**< Base motor speed */
+#define BASE_SPEED 45                   /**< Base motor speed */
 
 /* Yaw Alignment PID - 用於原地旋轉對齊 */
 #define YAW_PID_kp 0.4f     // 提高響應速度
@@ -32,7 +32,7 @@
 #define BALL_BIG_RADIUS 1200.0f         /**< R = Max eye value * tan(theta) */
 #define POSSIBLE_MAX_BALL_VALUE 2000    /**< Maximum possible value from IR sensor when ball is very close, used for angle correction calculation */
 #define BALL_CLOSE_VALUE_THRESHOLD 1500 /**< Threshold for considering the ball "close" and applying additional speed bonus */
-#define BALL_CLOSE_SPEED_BONUS 25       /**< Additional speed bonus when ball is close */
+#define BALL_CLOSE_SPEED_BONUS 15       /**< Additional speed bonus when ball is close */
 
 #define ANGLE_HALF_CIRCLE 180.0f        /**< Half circle angle (degrees) */
 

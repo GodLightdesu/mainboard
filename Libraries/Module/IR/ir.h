@@ -7,7 +7,7 @@
 #define TOTAL_IR_SENSORS 14     /**< Total number of IR sensors (EYE_NUM * IR_SLAVES_NO) */
 
 /* Ball detection threshold */
-#define IR_DETECTION_THRESHOLD 15  /**< Minimum signal strength to consider ball detected (lower = farther detection) */
+#define IR_DETECTION_THRESHOLD 25  /**< Minimum signal strength to consider ball detected (lower = farther detection) */
 
 /* I2C slave addresses */
 #define IR_SLAVE_1_ADDR (0x30 << 1)

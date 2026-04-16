@@ -4,7 +4,7 @@
 #include "soccer.h"
 #include "PID.h"
 
-#define BALL_CHASE_SPEED_BONUS 20     /**< Additional speed when chasing ball */
+#define BALL_CHASE_SPEED_BONUS 10     /**< Additional speed when chasing ball */
 #define ATK_BOUND_MOVE_SPEED 65       /**< Speed for boundary correction movement */
 
 /* Corridor Correction PID - 用於追球時的偏航修正 */

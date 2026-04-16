@@ -1,6 +1,6 @@
 #include "grayscale.h"
 
-#define GRAYSCALE_THRESHOLD_RATIO_PERCENT 20U
+#define GRAYSCALE_THRESHOLD_RATIO_PERCENT 50U
 // 最小有效讀數差值。若綠地/白線差值很大(如2700)，可提高(100~500)抗雜訊。
 // 若設10也常校正失敗，表示感測器讀值無縮放或硬體異常。
 #define GRAYSCALE_MIN_VALID_RANGE         10U

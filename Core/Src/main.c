@@ -309,7 +309,7 @@ int main(void)
     // dataUart_PrintIRData(moduleData.irData);
     // dataUart_PrintXsoundData(moduleData.xsoundData);
     // dataUart_PrintGrayscaleData(moduleData.grayscaleData);
-    // dataUart_PrintGrayscaleLineInfo(Grayscale_GetLineInfo());
+    dataUart_PrintGrayscaleLineInfo(Grayscale_GetLineInfo());
     // dataUart_PrintCamData(moduleData.camData);
     // dataUart_PrintMPU6050Euler(moduleData.mpuData);
 
